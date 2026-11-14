@@ -12,3 +12,14 @@ playwright-report/
 .env.*
 !.env.example
 .DS_Store
+.idea/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.local/
+*.key
+*.keys
+*.token
+backend/openapi.tmp.json
