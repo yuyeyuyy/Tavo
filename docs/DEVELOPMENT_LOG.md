@@ -75,3 +75,24 @@ Phase 0 已具备隔离 IPC、独立 Core、Registry、SQLite、Mock 与图执�
 8. ESLint 捕获开发脚本中浏览器回调的 window 环境声明问题，已明确浏览器上下文并通过复查。第三方 PURE 注释、默认图标、未签名和颜色环境提示仍是非失败提示。
 
 最终实际命令、测试数量和边界见 `PHASE_1_REPORT.md` 与 `EVALUATION.md`。没有把 401/429 模拟测试当作真实 HTTP 平台验证，也没有把构建成功当作实际业务成功。
+
+## 2026-11-13：Architecture Refactor
+
+用户明确授权将 Electron 单体重构为 Electron/React 客户端与独立 Python/FastAPI 服务端。先阅读旧规划/架构/实现，验证 79 项旧 TS 测试、lint/typecheck/build；仓库起初无 Git，建立源码基线 `898328d` 和 `refactor/client-server-python` 分支，不推送。
+
+新增后端 Pydantic、SQLAlchemy/Alembic、SecretStore、客户端会话认证、账户/连接器、持久 Worker 租约与 fencing、增量事务/重试/恢复、事件 REST/SSE、Python LangGraph。客户端改用 API Client + TanStack Query；原生 IPC 仅 6 项。保留旧业务包和学习注释，旧数据库先备份再导入独立目标。
+
+逐步验证 Python/API/Worker/图与迁移、API Client、独立进程 REST/SSE/重启，以及真实开发窗口和构建/打包 Electron。详细命令、计数、部署边界及未验证事项以 REFACTOR_REPORT.md / EVALUATION.md 为准，旧 Phase 报告保持历史记录。
+
+## 2026-11-13：清理迁移前的 TS 实现
+
+按用户要求删除不再使用的 Core/Storage/Connector/JS Agent、旧业务 IPC/safeStorage、重复归档及对应测试/原生检查脚本。删除前验证受影响旧文件与 Git 基线一致；当前未提交的客户端/Python 改动、IDE 文件和私有数据不动。
+
+原 SQL 先逐字节提取到 backend/tests/fixtures/legacy，Python 测试不再读取 TS 源码；当前共享 DTO 保留，移除旧业务端口。依赖与文档同步更新。当前验证结果和测试计数以 LEGACY_CLEANUP.md 为准，原 79 项旧运行时测试作为 Git 历史保留。
+
+
+## 2026-11-14：上传 GitHub 与分支整理
+
+用户授权上传至 yuyeyuyy/Tavo。保持仓库私有，main/dev 使用已验证 Phase 1 基线加私有文件忽略规则，完整 Python 重构与清理成果放到 feat/client-server-python。上传前重新执行 lint/typecheck/客户端 12 项/Python 34 项/build，检查当前文件及 Git 历史的常见密钥格式，不上传 .idea、数据库、密钥、令牌或本机产物。
+
+使用 GitHub noreply 提交身份，不修改全局身份；通过临时回环 GitHub TLS 隧道解决现有 DNS 故障，不修改系统 DNS。具体分支职责见 GIT_WORKFLOW.md，不自动合并或发布 Release。

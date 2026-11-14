@@ -9,22 +9,26 @@
     "pnpm": ">=11 <12"
   },
   "scripts": {
-    "dev": "pnpm native:electron && pnpm --filter @tavo/desktop dev",
+    "dev": "pnpm --filter @tavo/desktop dev",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "test": "pnpm native:node && vitest run",
+    "lint": "eslint . && backend/.venv/bin/ruff check backend && backend/.venv/bin/ruff format --check backend",
+    "test": "pnpm test:client && pnpm test:backend",
     "build": "pnpm --filter @tavo/desktop build",
-    "native:node": "node scripts/check-native.cjs",
-    "native:electron": "node scripts/check-native.cjs --electron",
-    "test:e2e": "pnpm build && pnpm native:electron && playwright test",
+    "test:e2e": "pnpm build && playwright test",
     "package:dir": "pnpm build && pnpm --filter @tavo/desktop package:dir",
     "test:packaged": "TAVO_PACKAGED=1 playwright test",
-    "test:dev": "node scripts/dev-smoke.mjs"
+    "test:dev": "node scripts/dev-smoke.mjs",
+    "dev:backend": "cd backend && uv run python -m app.cli serve",
+    "backend:init": "cd backend && uv sync --frozen && uv run python -m app.cli init",
+    "test:client": "vitest run",
+    "test:backend": "cd backend && .venv/bin/python -m pytest -q",
+    "api:generate": "cd backend && .venv/bin/python -m app.export_openapi && cd .. && openapi-typescript backend/openapi.json -o apps/desktop/src/renderer/api/generated.ts",
+    "test:docker": "node scripts/docker-smoke.mjs",
+    "test:backend:smoke": "node scripts/backend-smoke.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.63.0",
-    "@types/better-sqlite3": "7.6.13",
     "@types/node": "24.13.4",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
@@ -41,11 +45,7 @@
     "vite": "7.3.7",
     "vitest": "4.1.12",
     "@tavo/shared": "workspace:*",
-    "@tavo/core": "workspace:*",
-    "@tavo/connectors": "workspace:*",
-    "@tavo/agent": "workspace:*",
-    "@tavo/storage": "workspace:*",
-    "better-sqlite3": "13.0.3",
-    "@langchain/langgraph": "1.7.3"
+    "openapi-typescript": "7.13.0",
+    "swagger-ui-dist": "5.34.1"
   }
 }

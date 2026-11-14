@@ -7,7 +7,7 @@ export default defineConfig({
   main: {
     build: {
       externalizeDeps: false,
-      rollupOptions: { external: ['better-sqlite3'], output: { format: 'cjs', entryFileNames: 'index.cjs' } },
+      rollupOptions: { output: { format: 'cjs', entryFileNames: 'index.cjs' } },
     },
   },
   preload: {
@@ -17,16 +17,8 @@ export default defineConfig({
     },
   },
   renderer: {
-    plugins: [
-      react(),
-      {
-        name: 'development-csp', apply: 'serve',
-        transformIndexHtml: (html) => html
-          .replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
-          .replace("style-src 'self'", "style-src 'self' 'unsafe-inline'")
-          .replace("connect-src 'none'", "connect-src 'self' ws://localhost:* ws://127.0.0.1:*"),
-      },
-    ],
+    server: { host: '127.0.0.1', port: Number(process.env.TAVO_DEV_PORT ?? 5173), strictPort: true },
+    plugins: [react()],
     css: { postcss: { plugins: [tailwindcss({ content: [resolve('src/renderer/**/*.{html,ts,tsx}')], theme: { extend: {} } })] } },
   },
 });

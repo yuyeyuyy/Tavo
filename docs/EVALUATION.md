@@ -1,3 +1,5 @@
+> 当前版本为 2026-11-13 客户端 + Python 服务端重构，清理后的结果见文末与 LEGACY_CLEANUP.md，重构基线见 REFACTOR_REPORT.md；前面的 Phase 0/1 是历史验证记录。
+
 # Phase 0 验证记录
 
 验证日期：2026-11-12（Asia/Taipei）。环境：macOS 27.0.1 / arm64，Node.js 24.15.0，pnpm 11.1.3；Electron 44.11.1 内嵌 Node.js 24.22.2，SQLite 3.53.4。数据均为本地模拟数据。
@@ -69,3 +71,25 @@
 本机打包首次因 `ENOTFOUND github.com` 失败；随后仅对打包进程使用临时 DNS 辅助。该辅助不在仓库，未更改系统设置。版本 1 迁移 SQL 与本轮开始前源码比较，hash 一致。
 
 未验证：真实第三方 HTTP、Windows/Linux/Intel 系统安全后端、正式签名/公证/安装升级、大规模性能、跨 Worker 同步、完整渗透测试。所有重试和 401/429 均为 Mock 场景，不用于声明真实平台成功率。
+
+
+# 客户端 + Python 服务端验证（2026-11-13）
+
+实际最终结果：ESLint / Ruff / Python 格式检查、TS typecheck、build 均通过；Vitest 11 文件 / 85 用例（保留旧 79 + 新 6）通过，Pytest 最终 33 用例通过。迁移、Worker、凭据、图与 SSE 的覆盖范围及逐条命令见 REFACTOR_REPORT.md。
+
+真实进程验证：`node scripts/backend-smoke.mjs` 通过 REST / 认证 / 持久同步 / SSE 回放 / Python Agent / 重启；`pnpm test:dev` 通过 Vite 窗口流程；构建模式 Playwright 3 场景通过；`pnpm package:dir` 产出未签名 ARM64 测试包，`TAVO_BROWSER_CHANNEL=chrome pnpm test:packaged` 3 场景通过（最终 39.2 秒），包含生产 CSP、Renderer 隔离、桌面退出后后端继续同步和迁移历史入口。实际浏览器 /docs 使用已安装 Chrome，Swagger 资源不依赖 CDN。
+
+Linux 验证：Docker 镜像实际构建完成，`node scripts/docker-smoke.mjs` 退出 0。隔离 Compose 项目中以 Linux arm64 / UID 10001 运行，无 Node/Electron；API 与独立 Worker 共享数据库/密钥卷，验证 pending 队列、Worker 停止/重启、同步、加密与 0600 密钥、SSE、Python Agent、API 重启历史。仅清理测试脚本自己创建的容器/卷，常规数据与旧库不删。
+
+真实旧库为 1 连接器、0 账户、0 任务、0 事件，已备份并导入独立后端；有数据 Phase 0/1 用例使用合成夹具做关系/字段/数量及回滚验证，不能声称迁移了真实账户。截图 `test-results/tavo-desktop.png` 已目视检查；产物不纳入源码。
+
+未验证：Windows、Linux amd64、Intel macOS、干净机器安装、签名/公证、规模性能、认证暴力尝试、完整秘密扫描与渗透测试。未实现：完整生产 HTTPS/多用户授权与租户隔离、专用 KMS、持久 Graph checkpoint/真实工具/HITL、真实连接器/模型。通过编译、Mock 或容器测试不等于这些能力已通过。
+
+
+# 清理旧代码后的验证（2026-11-13，当前）
+
+原 79 项旧 TS 运行时测试随旧实现移除，先前 85 项是历史基线。当前 `pnpm test` 实际通过客户端 12 项（API/连接配置 6 + DTO/状态/历史兼容 6）、Python 34 项（含新增旧 SQL 哈希检查）。`pnpm lint`、`pnpm typecheck`、`pnpm build`、`git diff --check` 均通过。
+
+真实 Electron `TAVO_BROWSER_CHANNEL=chrome NODE_OPTIONS='--require=/private/tmp/tavo-dns.cjs' pnpm exec playwright test`：3 场景通过（37.1 秒），验证当前同步/Agent/认证/CSP/重连、独立 SQL 夹具生成旧库并导入显示和分析、退出桌面后继续同步。首次测试因事件列表刷新时序误选旧事件失败，改为等待指定账户/余额的变化事件再分析后通过，未修改业务逻辑。
+
+当前仅 root / desktop / shared 三个 pnpm 项目，锁文件没有旧业务包、better-sqlite3、Drizzle 或 JS LangChain。旧 SQL 与基线字节一致，迁移能力及用户数据库/密钥/备份保留。详见 LEGACY_CLEANUP.md。本轮未重跑测试包、Docker 或性能测试，不沿用历史结果冒充当前执行。

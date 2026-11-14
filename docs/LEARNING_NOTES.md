@@ -1,151 +1,158 @@
-# Phase 0 学习笔记
+# 用前后端知识理解这次重构
 
-这些是本轮实现涉及的知识与复盘题，不代表开发者已经掌握。建议用代码和测试自己复述一遍。
+这是学习路线与练习，不代表已经掌握。旧 Phase 0/1 笔记保存在 `PHASE_0_1_LEARNING_NOTES.md`。先跑通 README，再按下面顺序读代码。
 
-## 1. Electron 进程模型与安全 IPC
+## 1. 先把熟悉的概念对应起来
 
-**解决的问题**：网页 UI 不能因为一个输入就取得文件系统或密钥权限。Main 运行 Node 业务，Preload 用 contextBridge 暴露最小方法，Renderer 只消费 DTO。
+| 你熟悉的前后端概念 | Tavo 中的实际对象 |
+| --- | --- |
+| React 页面调用后端 SDK | `apps/desktop/src/renderer/api/client.ts` |
+| Controller / Router | `backend/app/api/routes.py` |
+| 请求 DTO 与校验 | `backend/app/api/schemas.py` 的 Pydantic 模型 |
+| Service / 业务层 | `backend/app/services/accounts.py` 等 |
+| DAO / Repository | `backend/app/repositories/workspace.py` |
+| ORM Entity / 数据表 | `backend/app/models/entities.py` |
+| 后台任务进程 | `backend/app/workers/scheduler.py` |
+| 接第三方 API 的适配器 | `backend/app/connectors/registry.py`，当前只有 Mock |
+| 前端服务器状态缓存 | TanStack Query；Zustand 仅保存 busy/error 等交互状态 |
+| Electron Main / Preload | 窗口和系统能力宿主；本轮不再负责业务后端 |
 
-**技术**：context isolation、sandbox、CommonJS preload、精确 URL 和 sender 主框架/窗口校验、unknown + Zod、判别联合 `Response`。TypeScript 类型只在编译期有效；IPC 和外部输入仍需运行时校验。
+例如点击“同步账户”：React → API Client POST → Router 验证身份与参数 → AccountService 创建任务 → SQLite 保存 pending → Worker 执行 → REST/SSE 通知页面刷新。HTTP 返回 202 表示“已接收”，不表示“同步已成功”。
 
-**两种方案**：每操作一个白名单方法容易审计；通用 `invoke(channel,args)` 方便但暴露过多权限。本项目选择前者。开发 HMR 需要本地连接和内联脚本，生产 CSP 维持严格策略。
+## 2. FastAPI 依赖注入
 
-**扩展注意**：新增操作必须同时定义输入、输出、权限和错误码，不能把任意工具、SQL、URL、文件路径变成参数。
+代码：`backend/app/main.py` 的 create_app/lifespan，`api/dependencies.py` 的 ServicesDep/authenticated，`tests/conftest.py`。
 
-**面试追问**：启用 contextIsolation 后为什么仍要校验 sender？为什么只校验 origin 不够？
+可以在每个路由里 new 数据库，也可以由应用生命周期创建 Services，再用 Depends 取得同一依赖。前者直观但难管理连接和替换测试；本项目选择后者。测试通过 services_factory 注入 MockConnector、假时钟与临时库，不需要修改业务代码。
 
-**10–20 分钟练习**：给 IPC 测试增加一条“同一路径、不同查询字符串”或“同 URL、其他窗口”的拒绝用例，解释预期原因。
+输入是应用配置和请求上下文；输出是已装配的服务对象。依赖不是全局魔法：lifespan 明确 initialize、yield、close，测试必须进入 TestClient 上下文，才能执行启动与关闭。
 
-## 2. TypeScript 端口、依赖注入与连接器
+面试点：依赖注入与“到处读全局变量”的差别；请求作用域和应用作用域；测试替身为何应放在边界。
 
-**解决的问题**：相同 Core 既能在 Electron，也能在 Node 测试中运行。Storage、AgentRuntime 是接口，由宿主决定具体实现；Capability 描述可提供的数据，宿主权限约束实际可调用行为。
+## 3. Pydantic 请求验证与 OpenAPI
 
-**技术**：interface、泛型事件映射、`keyof`、Zod infer、构造参数注入时钟、async 生命周期、Map 注册表。
+代码：`api/schemas.py` 的 AddAccount、MockConfig、AccountOut，`main.py` 的 validation_error，`app/export_openapi.py`，客户端 `api/generated.ts` / `api/client.ts`。
 
-**两种方案**：Core 直接 `new SqliteStorage()` 简单但耦合环境；构造参数注入使替换和故障测试容易。本项目采用轻量注入，不引入 DI 框架。Registry 是内置连接器生命周期管理器，并不隔离任意第三方代码。
+Python 类型注解单独使用不会自动验证 JSON；FastAPI 配合 Pydantic 在 HTTP 边界解析和验证。例如 usageUnits 要严格整数且有上限，displayName 去除空白，DTO 禁止多余字段。响应模型也检查 connected 与 credentialConfigured 的一致性。
 
-**扩展注意**：动态插件加载需要代码信任和执行隔离，不能把 capability 当作 OS 沙箱。并发任务、清理失败、注销中同步等情况应在增加真实连接器前补充设计。
+两种做法：前后端各写一套接口类型容易漂移；从 OpenAPI 生成 TS 类型能减少重复。本项目使用后者，但 TS 类型只在编译时存在，因此外部 JSON/SSE 仍用 Zod 校验。不要手改 generated.ts，改 Pydantic 后运行 `pnpm api:generate`。
 
-**面试追问**：类型安全 Event Bus 如何保证事件名与 payload 对应？为什么监听器异常不能影响已提交事务？
+默认校验异常可能回显输入，当前统一只返回固定 INVALID_INPUT，避免把敏感值拼进异常。面试点：编译期类型和运行时验证、DTO 和 ORM 的区别、400/401/403/404/409/422/202 的语义。
 
-**10–20 分钟练习**：自己实现一个只在测试使用的故障连接器，第二次 sync 抛错，断言旧余额和失败任务状态。
+## 4. Python async / await
 
-## 3. SQLite 事务、幂等与迁移
+代码：`connectors/registry.py` 的 sync，`workers/scheduler.py` 的 tick/execute_sync/run，`api/routes.py` 的 stream。
 
-**解决的问题**：一次同步不能只保存半批数据；重复拉取不能重复新增同一上游事件；重启不能丢失记录。
+可以用同步函数顺序等待，也可以 async 在 I/O 等待期间让出事件循环。本项目 Mock 以 asyncio.sleep 模拟网络等待；Worker 用 create_task 同时执行有限数量的账户。async 不会自动创建线程，SQLite 同步查询也不会因为外面写了 async 就变成非阻塞。
 
-**技术**：Drizzle 类型化查询、SQLite transaction、外键、复合唯一索引、upsert、WAL、SQL 版本/hash 表。余额保存字符串，规则比较时转 BigInt 最小货币单位。
+数据库事务保持短小，不跨连接器等待。超时后 cancel 只是取消请求，不保证第三方库一定响应；保留未结束请求的账户/并发名额，晚到结果必须重新通过状态与 fence 检查。面试点：并发与并行、协作取消、超时与任务终态不是同一概念。
 
-**两种方案**：在业务代码中先查再插可能遭遇并发竞态；让数据库唯一约束与 upsert 处理幂等更可靠。本项目采用后者。迁移可手写 SQL，也可 drizzle-kit 生成；当前用嵌入式 SQL 控制本轮依赖和打包路径。
+## 5. SQLAlchemy ORM 与事务
 
-**扩展注意**：不能修改已经执行的迁移；新增版本和升级测试。失败不等于余额为零；当前账户采集时间和上游事件时间是两个概念。备份 WAL 数据库不能在运行时只复制主文件。
+代码：`models/entities.py`、`repositories/database.py` 的 session、`repositories/workspace.py` 的 commit_sync；测试 `tests/test_worker.py`。
 
-**面试追问**：外部请求失败与本地事务失败有何区别？唯一索引为何比“查重 if”可靠？
+ORM 把行映射成 Python 对象，session 负责跟踪修改并提交。Session 和 HTTP 客户端 session 同名但职责完全不同。读取会话结束后关闭；写会话 BEGIN IMMEDIATE，成功 commit，异常 rollback。
 
-**10–20 分钟练习**：仿照回滚测试，让第二条事件引用不存在的账户，验证第一条账户也没有落盘，然后自行说明事务边界。
+两种保存方式：数据、cursor、任务和事件分次提交，代码局部简单但可能留下半次同步；同事务提交能保证整体成功或整体失败。项目选择同事务。数据库还有唯一约束，避免“先查询没有，再插入”的并发竞态。
 
-## 4. 原生模块、Node-API 与打包
+重要例子：如果先推进 cursor，再保存数据失败，下次请求可能永久跳过这批数据。测试在 sync.completed 写入时故意触发数据库错误，证明此前数据、cursor、变化事件和成功状态全部回滚。失败余额不是 0，而是“当前请求失败，保留上次成功值”。
 
-**解决的问题**：Node 中能加载的原生模块未必能在 Electron 或 ASAR 中加载。
+面试点：ACID、幂等、复合/部分唯一索引、WAL、事务持锁时间；外部 API 不在本地数据库事务里，不能声称 Exactly-once。
 
-**技术**：Node-API 稳定边界、平台/CPU 预构建、external dependency、electron-builder、asarUnpack、用户数据目录。
+## 6. Alembic 与数据迁移
 
-**两种方案**：传统 V8 ABI 模块需针对 Electron 重建；采用 Node-API 的模块可在兼容运行时复用二进制，但仍依赖 OS/CPU 和正确打包。本轮锁定的 better-sqlite3 13 属于后者，不能把空重编译成功当作实际读写证据。
+代码：`backend/migrations/env.py`、`versions/0001_backend_independent_backend.py`、`services/migration.py`、`tests/test_migration.py`。
 
-**扩展注意**：升级驱动后重新执行双运行时检查和打包后 E2E。签名、公证、Gatekeeper、安装更新属于独立验收。Node Worker 可以让同步查询不阻塞 Main，但要自行设计消息、关闭和错误传播。
+Alembic 是数据库结构版本管理，像代码的版本演进。`init` 执行 upgrade head；既有迁移不能随意修改，新增字段应生成新 revision、审查 SQL，再写升级测试。autogenerate 只生成候选变更，不能自动判断业务兼容性。
 
-**面试追问**：为什么 `.node` 需要从 ASAR 解包？为什么数据库不能放在应用安装目录？
+旧 Drizzle 库的数据转换是另一件事，由 import-legacy 承担：一致性备份 → 独立目标写事务 → 数量/ID/外键核验。直接删库重建会丢失状态，本项目保留源库用于回滚。旧 safeStorage 密文无法由 Python 解密，保留归档并要求重新授权，不能把“有密文字节”当成“授权可用”。
 
-**10–20 分钟练习**：运行两个 native 检查命令，对比 Node/Electron 版本；在 `.app/Contents/Resources/app.asar.unpacked` 找到平台原生文件，并说明仍需测试的目标平台。
+面试点：Schema migration 与 ETL、向后兼容、备份 WAL 数据库、回滚源码不等于回滚数据。
 
-## 5. LangGraph State、Node 与 Checkpoint
+## 7. REST API 与长任务
 
-**解决的问题**：将输入事件的规则判断和解释输出拆成可验证步骤，之后可逐步增加暂停和工具权限检查。
+代码：`api/routes.py`、`services/accounts.py` 的 enqueue、`services/agent.py`，API 清单在 `docs/API.md`。
 
-**技术**：Annotation.Root、StateGraph、START/END、节点部分状态更新、compile/invoke、MemorySaver、thread_id。classify 与 explain 是真实图节点；没有调用任何模型。
+普通 CRUD 用 HTTP；长同步/分析先创建持久记录，再返回 202 和稳定 id，客户端 GET 状态。不要在请求函数里一直等待完整任务，也不要用 FastAPI BackgroundTasks 承担跨进程恢复需求。
 
-**两种方案**：一个纯函数足以完成当前规则，代码最少；LangGraph 状态图增加依赖和编排成本，但能提前验证未来所需的状态传递与 checkpoint。本轮用户明确要求最小 LangGraph，采用两节点图并约束范围。
+分页有两种：账户/任务用 limit+offset，易理解；事件用 sequence 游标，更适合持续追加的数据。本项目同时使用。删除账户采用软删除并保留审计历史，列表默认不返回已删除连接。
 
-**扩展注意**：分析结果持久化与 Graph checkpoint 不是一回事。MemorySaver 随进程退出丢失；SQLite 中的 Event.analysis 才是当前 UI 重启后仍有结果的原因。Checkpoint 不等于长期记忆，未来 HITL 和工具执行还需权限、幂等和恢复设计。
+面试点：资源建模、状态码、分页稳定性、幂等写与重复点击、请求取消不等于后台任务取消。
 
-**面试追问**：checkpoint 保存什么？为什么 thread_id 很关键？有状态图是否意味着一定用了 LLM？
+## 8. SSE：后端向前端推事件
 
-**10–20 分钟练习**：自己补充 `0.00 USD` 和 `999999999999.99 USD` 的边界测试，说明 BigInt 如何避免金额精度损失。
+代码：`api/routes.py` 的 stream、`services/events.py`、客户端 `APIClient.subscribe`、`renderer/store.ts`；测试 `tests/test_sse.py` 与根目录 `scripts/backend-smoke.mjs`。
 
-# Phase 1：从前后端分层理解桌面服务
+轮询每次发新请求，简单但有等待和空响应；SSE 保持一个 HTTP 响应，服务端不断写文本帧，适合单向通知。本项目 SSE 帧有 id、event、data，id 使用持久 sequence，不使用毫秒时间排序。心跳注释保持流活跃。
 
-以下章节记录本轮实际实现。可以把 IPC Handler 理解为 Controller、WorkspaceRuntime / AccountManager / SyncEngine 理解为 Service、SqliteWorkspaceRepository 理解为 Repository。Renderer 通过白名单 SDK 请求服务，进程通信采用 IPC。
+客户端读流时要考虑分块：一个网络 chunk 不保证刚好是一条事件，所以先缓冲再按空行拆帧。断开后用 Last-Event-ID / after 恢复，按 sequence 去重。SSE 只用于及时展示，最终状态仍在数据库，可用 taskId / runId 查询。
 
-## 账户管理：适配器、接口与依赖倒置
+面试点：SSE 与 WebSocket 的适用场景、断线重连、重放去重、浏览器认证方式、代理缓冲。当前未实现 SSE 连接数量限制或水平扩展评测。
 
-- 核心设计：Connector 表示“平台类型”，Connection 表示“授权账户实例”。两个 Mock 账户共享连接器实现，各自拥有独立数据、凭据引用、游标和任务。
-- TypeScript / Node 技术：interface、判别状态、纯状态转换函数、构造参数注入、UUID、每账户异步互斥。
-- 方案选择：可以将账户操作写进页面，也可以集中在业务服务。集中在 AccountManager 后，页面、测试和未来 Node Worker 都调用同一套状态规则。直接依赖 Electron 的实现被放在 Main 的适配器里，Core 只依赖接口。
-- 典型错误：把“连接器存在”当成“账户已授权”，或让 connected 与 credentialConfigured=false 同时存在。当前使用状态转换和 Zod 状态组合校验，重复身份由唯一索引兜底。
-- 面试点：账户与连接器为什么分开？依赖倒置如何降低测试成本？类型接口为什么不能代替运行时输入校验？
+## 9. 服务端调度、租约与 fencing
 
-## 凭据管理：受限回调与最小权限
+代码：`workers/scheduler.py`，`models/entities.py` 的 WorkerLease，`repositories/workspace.py` 的 require_leader。
 
-- 核心设计：OS 负责加密，CiphertextRepository 负责存储字节，CredentialAccess 负责限定谁可在何种账户状态下使用凭据。Renderer 只提交公开账户标识；模拟凭据由 Main 流程生成。
-- 技术：异步接口、`use<T>(connection, callback): Promise<T>` 泛型、依赖注入、Buffer / Uint8Array、固定错误映射、重新授权检查、密文 compare-and-swap。
-- 方案选择：可以使用独立加密文件，也可以保存 OS 密文到 SQLite。当前选择后者，便于原子替换和断开清理；没有自行设计密码算法或硬编码加密密钥。macOS / Windows 使用异步 safeStorage，Linux 保守地只接受可明确识别的系统后端。
-- 典型错误：解密还在等待时账户已经断开；或者旧值触发 OS 密钥轮换重加密，覆盖了并发更新的新凭据。当前在等待后重新检查账户，超时后不启动连接器；重加密只在旧密文仍相同时替换，避免覆盖新值或复活已删记录。
-- 面试点：加密与授权有什么区别？为什么保护了磁盘文件仍不能把密钥交给 Renderer？同一用户进程、应用签名和 OS 后端影响什么安全保证？CAS 如何避免异步竞争？
+进程内定时器只能保证本进程不重复执行；多个 API/Worker 同时启动时需要共同判断。项目用 SQLite 单行租约选领导者，持有者续租，过期者可被接管。每次接管增加 fence，提交数据必须匹配当前 owner/fence。
 
-## 同步引擎：Promise、调度与并发控制
+只有锁还不够：旧 Worker 网络等待太久，租约失效后仍可能带着结果回来。fencing 在数据库写入处拒绝它。任务和 nextAttemptAt 持久化，重启不会忘记重试。永久错误如 401/403 停止自动重试；临时错误指数退避加抖动。
 
-- 核心设计：请求先落为 pending 任务；独立 Node 定时器取得名额后执行，任务与重试时间持久化。定时器不依赖 React 挂载或窗口是否打开。
-- 技术：Promise / async-await、AbortController、Promise.race、Map / Set、setInterval、finally 释放资源、注入时钟与随机源。
-- 方案选择：可以在 Promise 中 sleep 等待重试，也可以保存 nextAttemptAt 等调度器再运行。当前采用后者，重启可恢复，等待阶段不占用工作 Promise。默认每账户一个活动任务、全局两个名额。
-- 典型错误：Promise.race 超时后，底层请求仍可能运行，立刻重试会产生同账户重叠请求。当前保留底层请求占用的名额；晚到响应被丢弃。连接器应遵守 AbortSignal，无法取消的请求可能阻塞名额直到结束或重启。
-- 面试点：并发和并行有什么区别？async 函数是否自动创建线程？Promise.race 为什么不等于取消？进程内锁与数据库唯一索引分别保证什么？
+两种方案：Redis/Celery 适合更大规模和跨机器队列；本地 SQLite 队列依赖少，适合当前单机小规模，但需自行管理租约、恢复和短事务。本轮选后者，不能据此宣称完整分布式调度系统。
 
-## 幂等、增量与 SQLite 事务
+面试点：至少一次处理、租约与互斥锁、过期执行者、重试风暴、退避抖动、崩溃恢复。
 
-- 核心设计：把数据、游标、成功状态、变化事件放在同一事务。游标是已经完成本地处理的位置，提前推进可能永久跳过数据。
-- 技术：Drizzle 类型化查询、事务、部分唯一索引、upsert、版本比较、SQL trigger 故障注入、迁移 hash。
-- 方案选择：只在业务层先查询再插入容易出现并发竞态；数据库约束能在最后写入边界阻止重复。业务层与数据库双重检查还可以返回更友好的错误。
-- 典型错误：数据只写了一半就更新游标，或者原样重放生成重复提醒。测试在最终 sync.completed 事件写入处强制失败，断言此前数据、游标、变化事件、成功状态整体回滚；重复同步则不产生新 data.changed。
-- 面试点：事务的原子性是什么？幂等是否等于不产生任何新记录？为什么同数据重放仍会产生新的同步任务？为什么 A→B→A 需要两次变化事件？外部 Exactly-once 为什么不能凭本地事务保证？
+## 10. LangGraph StateGraph
 
-## 指数退避与错误分类
+代码：`agent/graph.py`，`workers/scheduler.py` 的 execute_agent，`tests/test_worker.py` 的图等价/MemorySaver 测试。
 
-- 核心设计：区分可重试错误与永久错误，按任务限制最多尝试次数，等待时间落盘。
-- 技术：错误码枚举、自定义 ConnectorError、纯函数 retryDelay、注入 random、模拟时钟推进。
-- 方案选择：固定间隔实现简单，但多个账户可能同时重试；指数退避加抖动可分散重试。当前基础 1 秒、上限 30 秒、50%–100% 抖动，尊重模拟 Retry-After，默认最多 3 次尝试。
-- 典型错误：401 / 403 仍无限重试，或将外部失败当成余额为零。当前认证过期、权限不足、格式错误不重试，失败保留上次成功数据和游标。
-- 面试点：429 与 401 应怎样分别处理？重试次数与尝试次数有何区别？为什么自动调度也要识别永久错误？
+State 是工作流传递的数据结构；Node 是接收 State、返回部分更新的函数；Edge 决定下一步。当前 START → classify → explain → END，输入只有白名单事件字段。余额使用 Decimal，USD<10 / CNY<50 触发 warning，与旧 JS 输出等价。
 
-## 事件系统与可观察性
+纯函数就能完成当前规则，依赖更少；使用 StateGraph 则能学习分步骤状态传递、流式节点更新和将来的暂停恢复。用户明确要求最小图，故采用两个节点，不接真实模型。
 
-- 核心设计：Event Bus 负责进程内通知；EventRepository 负责可靠记录。系统的每次 timer tick 不需要写库，账户连接、同步生命周期和业务数据变化则持久化。
-- 技术：泛型 Event Bus、受限 payload Schema、自增 sequence、correlationId、来源 dedupeKey、事务后通知。
-- 方案选择：只使用内存事件很简单，但崩溃后无法追踪；所有函数调用都落盘又会制造噪声。当前把明确业务事件独立存储，每次同步所有重试共享同一 correlationId。
-- 典型错误：用毫秒时间或随机 UUID 排序导致顺序不确定；通知监听器抛错后把已完成业务标为失败。当前依赖自增 sequence，观察者异常不改变提交结果。
-- 面试点：correlationId 如何定位一次同步的全部尝试？持久事件是否自动等于可靠消息队列？提交后、通知前崩溃怎样处理？为什么未来自动 Agent 需要消费进度与幂等？
+分析结果持久化和图 checkpoint 不同：结果在 agent_runs / 原事件 analysis；MemorySaver 仅测试，进程退出会丢。create_graph 的 checkpointer 参数可接将来的持久化实现，但 Tool Calling、Memory、HITL 还需要明确权限、工具幂等和恢复协议，当前只有扩展入口。
 
-## Desktop Integration 与 IPC 安全
+面试点：状态图与普通调用栈、checkpoint 与长期记忆、确定性步骤与模型步骤、Human-in-the-loop 的恢复边界。
 
-- 核心设计：React 只显示快照和发起明确操作，Core 统一维护账户、任务与事件。Settings 的启动检测状态与每次凭据读写检查分开。
-- 技术：Zustand、受控表单、useEffect 展示轮询、contextBridge、固定 channel、Zod、顶层 frame / 窗口所有权 / URL 校验、CSP。
-- 方案选择：通过业务白名单方法开放能力，比任意 invoke(channel,args) 更容易审查。Renderer 刷新用于展示，自动同步由 Main 的 Node 引擎负责。
-- 典型错误：把定时同步放进页面 useEffect，切换页面或关闭窗口后任务消失；或者只校验参数，忽略请求来自哪个窗口。当前分别处理服务生命周期和 IPC 来源。
-- 面试点：Renderer 为什么应按不可信客户端处理？写入型接口为什么仍不能接受任意路径和工具名？Zustand 缓存与数据库事实来源有什么区别？
+## 11. 客户端认证与服务端 SecretStore
 
-## 两个可以独立完成的小练习
+代码：`core/security.py` 的 SessionService / SecretStore，`core/http_security.py`，`apps/desktop/src/main/backend.ts`，`tests/test_api.py`。
 
-### 练习 1：修改退避抖动策略（15–25 分钟）
+首先区分两种凭据：客户端凭据证明“这个桌面能访问 Tavo 后端”；第三方凭据证明“后端能读取某个平台账户”。后者永不返回客户端或 Agent。
 
-目标：将当前抖动范围从基础退避的 50%–100% 调整为 75%–100%，继续尊重 Retry-After，保持 30 秒上限。
+客户端持有 bootstrap 文件，换取 15 分钟短会话；服务器只保存摘要。Main 读取私有文件、保存短会话并为精确后端来源注入 Authorization；Renderer 不拿到认证原文。CORS 只限制浏览器跨域读取，不能代替身份认证；监听 localhost 也不等于安全，仍检查 Host、Origin 和认证。
 
-涉及文件：`packages/core/src/sync-engine.ts`、`tests/phase1/sync.test.ts`。
+服务端使用 Fernet/MultiFernet 认证加密第三方凭据。可选 OS Keyring 或独立外部密钥环；本项目选私有文件环以便无桌面运行，代价是备份和部署保护责任。密文和密钥都泄漏时保护失效；文件 0600 不是多用户授权系统。初始化和旋转先取得数据库写锁，避免两个进程覆盖彼此的密钥环；旋转保留新旧键，事务重加密，不自动裁剪旧键。
 
-先手算 attempt=1、random=0 和 attempt=2、random=1 的结果，再改纯函数和相关断言。验证命令为 `pnpm test`、`pnpm typecheck`、`pnpm lint`。验收：Retry-After 大于抖动结果时仍优先采用它；401 仍然不重试。不要修改已执行迁移。
+面试点：加密与认证/授权的区别、摘要与加密的区别、会话撤销、Origin/Host/CORS、TLS、密钥轮换。单所有者尚未实现 SaaS 用户和租户隔离。
 
-### 练习 2：给 Activity 增加“只看数据变化”开关（20–30 分钟）
+## 三个自己动手的小练习
 
-目标：用页面内状态筛选 `eventType === 'data.changed'`，关闭开关恢复全部当前加载事件，不改变数据库、同步引擎或事件生成逻辑。
+### 练习 1：增加一个后端过滤参数（20–30 分钟）
 
-涉及文件：`apps/desktop/src/renderer/src.tsx` 的 Activity、可选 `tests/e2e/desktop.spec.ts`。
+目标：给 GET /api/v1/events 增加可选 sourceId 过滤，不修改数据库结构。
 
-验收：创建连接并同步，修改余额再同步；打开开关只显示变化事件，关闭后仍能查看同步开始/成功/重试记录。运行 `pnpm typecheck`、`pnpm lint`、`pnpm build` 并手工检查开关。该练习可以帮助区分“展示筛选”和“业务数据删除”。
+文件：`backend/app/api/routes.py` 的 events、`services/events.py`、`repositories/workspace.py` 的 EventRepository.list、`backend/tests/test_api.py`。
+
+沿 Router → Service → Repository 传递 source_id：HTTP 别名 sourceId，限制字符串长度；Repository 增加 BusinessEvent.source_id 条件。当前只有 Mock，可以测试 sourceId=mock 返回对应事件，sourceId=unknown 返回空列表，不传参数保持现有结果。验收：分页仍生效；超长参数返回 422；未认证仍返回 401。最后运行 `pnpm api:generate`，在 /docs 确认新参数。先用后端测试完成，再选择是否加 UI 筛选。
+
+### 练习 2：修改 Python 退避抖动（20–30 分钟）
+
+目标：把 retry_delay 的 50%–100% 改为 75%–100%，保留 30 秒基础上限和 Retry-After 优先级。
+
+文件：`backend/app/workers/scheduler.py`、`backend/tests/test_worker.py`。
+
+先手算 attempt=1/random=0、attempt=2/random=1，再改纯函数和断言。验收：首次网络错误仍重试成功，401 不重试，Retry-After 大于基础退避时仍采用它。运行 `pnpm test:backend`；不要为这个练习改数据库。
+
+### 练习 3：给分析结果增加一个解释字段（40–60 分钟）
+
+目标：为 Analysis 增加可选 `ruleVersion` 字符串，给新图结果设置固定公开版本，旧历史缺字段仍可读。
+
+文件：`api/schemas.py` 的 Analysis、`agent/graph.py`、`packages/shared/src/contracts.ts` 的 analysisSchema、Python 图测试与客户端；改完运行 `pnpm api:generate`。
+
+验收：/docs 和生成的 TS 类型出现该字段；新结果保存并重启可读；旧分析 JSON 不含字段也能解析；API 参数不接受任意额外字段。先解释为什么这是 JSON 契约演进，当前无需新增 ORM 列，也不能随意改已执行的 Alembic migration。
+
+共同验证：`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`。涉及桌面交互再做 E2E 或人工点击。每次记录输入、输出、状态变化和实际测试结果。
+
+## 官方资料
+
+阅读项目代码后，可对照 [FastAPI Depends](https://fastapi.tiangolo.com/tutorial/dependencies/) 理解依赖声明；对照 [SQLAlchemy 2.0 Session](https://docs.sqlalchemy.org/en/20/orm/session_basics.html) 学习提交、回滚和会话生命周期；对照 [LangGraph Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api) 理解 State、Node、Edge；密钥环原理参考 [Fernet / MultiFernet](https://cryptography.io/en/latest/fernet/)。这些说明支持框架原理，项目实际业务行为仍以测试为准。

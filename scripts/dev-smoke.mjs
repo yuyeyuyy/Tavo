@@ -1,17 +1,19 @@
-/* global window */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { chromium, expect } from '@playwright/test';
+import { startBackend, freePort } from './backend-harness.mjs';
+const devPort = await freePort();
+const backend = await startBackend({ origins: [`http://127.0.0.1:${devPort}`, `http://localhost:${devPort}`] });
 
 const directory = mkdtempSync(join(tmpdir(), 'tavo-dev-'));
 const server = createServer();
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const port = server.address().port;
 await new Promise((resolve) => server.close(resolve));
-const env = { ...process.env, TAVO_USER_DATA: directory, REMOTE_DEBUGGING_PORT: String(port) };
+const env = { ...process.env, TAVO_USER_DATA: directory, TAVO_DEV_PORT: String(devPort), TAVO_BACKEND_URL: backend.origin, TAVO_CLIENT_TOKEN_FILE: backend.tokenFile, REMOTE_DEBUGGING_PORT: String(port) };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn('pnpm', ['dev'], { env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
 let output = '';
@@ -33,13 +35,13 @@ try {
   await page.getByRole('button', { name: '添加账户', exact: true }).click();
   await expect(page.getByTestId('connection-card')).toContainText('已连接');
   await page.getByRole('button', { name: '同步账户', exact: true }).click();
-  await expect.poll(async () => { const value = await page.evaluate(() => window.tavo.snapshot()); return value.ok ? value.data.data.length : 0; }).toBe(1);
+  await expect.poll(async () => (await backend.request('/snapshot')).data.length).toBe(1);
   await page.getByRole('button', { name: '总览', exact: true }).click();
   await page.getByRole('button', { name: '运行模拟分析', exact: true }).click();
   await expect(page.getByTestId('analysis')).toContainText('模拟账户余额低于演示阈值');
   expect(errors).toEqual([]);
   await page.screenshot({ path: 'test-results/tavo-dev.png', fullPage: true });
-  console.log('pnpm dev：窗口、账户连接、系统安全凭据、IPC 同步、LangGraph 分析通过。');
+  console.log('pnpm dev：窗口、账户连接、独立后端 HTTP 同步、Python LangGraph 分析通过。');
 } finally {
   // CDP 没有 Electron app.quit 语义；只清理本脚本独立创建的测试进程组。
   for (const signal of ['SIGTERM', 'SIGKILL']) {
@@ -51,5 +53,6 @@ try {
   }
   await browser?.close();
   child.stdout.destroy(); child.stderr.destroy();
+  await backend.cleanup();
   rmSync(directory, { recursive: true, force: true });
 }

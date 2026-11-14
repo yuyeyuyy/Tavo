@@ -5,10 +5,9 @@ directories:
 files:
   - out/**/*
   - package.json
+electronDist: ../../node_modules/electron/dist
 asar: true
-asarUnpack:
-  - '**/*.node'
-npmRebuild: true
+npmRebuild: false
 mac:
   target: dir
   category: public.app-category.productivity

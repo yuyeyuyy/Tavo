@@ -1,0 +1,22 @@
+[project]
+name = "tavo-backend"
+version = "0.1.0"
+description = "Tavo independent API and durable worker"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "fastapi==0.162.5", "pydantic==2.14.3", "sqlalchemy==2.0.57",
+  "alembic==1.20.1", "uvicorn==0.54.0", "langgraph==1.2.21",
+  "cryptography==50.0.2",
+]
+[dependency-groups]
+dev = ["pytest==9.2.0", "ruff==0.17.5", "httpx==0.28.1"]
+[tool.uv]
+package = false
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP"]

@@ -2,7 +2,7 @@
   "name": "@tavo/desktop",
   "version": "0.0.1",
   "private": true,
-  "description": "Tavo Local-first Personal Agent — Phase 0 Mock",
+  "description": "Tavo Desktop Client",
   "author": "Tavo contributors",
   "type": "module",
   "main": "out/main/index.cjs",
@@ -11,17 +11,13 @@
     "build": "electron-vite build",
     "package:dir": "electron-builder --dir --mac --arm64 --publish never"
   },
-  "dependencies": {
-    "better-sqlite3": "13.0.3"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@tavo/shared": "workspace:*",
-    "@tavo/core": "workspace:*",
-    "@tavo/agent": "workspace:*",
-    "@tavo/storage": "workspace:*",
-    "@tavo/connectors": "workspace:*",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "zustand": "5.0.15"
+    "zustand": "5.0.15",
+    "@tanstack/react-query": "5.107.1",
+    "zod": "4.6.6"
   }
 }

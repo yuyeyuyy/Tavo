@@ -1,121 +1,89 @@
-# Tavo 架构（Phase 1）
+# Tavo 客户端与独立服务端架构
 
-## 输入、输出和依赖
+当前以 2026-11-13 Architecture Refactor 为准；旧架构保存在 `PHASE_1_ARCHITECTURE.md`，决策见 `ADR/0003-client-server-python.md`。本阶段只迁移 Mock 功能。
+
+## 数据流
 
 ```mermaid
-flowchart TD
-  UI[React / Zustand] <--> Preload[白名单 Preload]
-  Preload <-->|IPC + Zod + sender 校验| Main[Electron Main]
-  Main --> Runtime[WorkspaceRuntime / 业务入口]
-  Runtime --> Accounts[AccountManager]
-  Runtime --> Sync[SyncEngine / Node 定时器]
-  Accounts --> Writer[CredentialStore 写入与删除端口]
-  Sync --> Access[ScopedCredentialAccess]
-  Access --> Vault[EncryptedCredentialStore]
-  Writer --> Vault
-  Vault --> OS[Main safeStorage 适配器 / 系统密钥后端]
-  Sync --> Registry[ConnectorRegistry / 只读 Mock]
-  Accounts --> Repo[WorkspaceStorage]
-  Sync --> Repo
-  Vault --> Cipher[CiphertextRepository]
-  Repo --> DB[(SQLite)]
-  Cipher --> DB
-  Runtime --> Graph[既有 LangGraph 演示]
+flowchart LR
+  UI[React 页面] --> Q[API Client / TanStack Query]
+  Q -->|REST / SSE| R[FastAPI Router]
+  R --> S[Service]
+  S --> P[Repository]
+  P --> DB[(SQLAlchemy / SQLite)]
+  W[Scheduler / Worker] --> DB
+  W --> C[Connector Registry / Mock]
+  W --> G[Python LangGraph]
+  SS[SecretStore / 外部密钥环] --> C
+  UI -->|原生能力 IPC| M[Electron Main]
 ```
 
-包依赖继续为 `core → connectors → shared`、`storage → shared`、`agent → shared`。Desktop 负责具体实现装配；Core 无 Electron / React 依赖。ElectronEncryptionProvider 在 Main，Core 只识别 EncryptionProvider 接口。业务包仍为 workspace TypeScript 源码，尚未发布为 SDK，也未新增 headless CLI。
+Main 不启动、停止或导入后端业务。HTTP 与桌面进程生命周期独立；本机开发可让 API 内嵌 Worker，Compose 使用 API / Worker 两个无桌面进程。Python 无 TS 包运行时依赖。
 
-`shared/contracts.ts` 保留原契约，`shared/phase1.ts` 定义新增 DTO、Zod Schema 和端口，`index.ts` 保留统一导入路径；没有把数据库或同步实现塞入 Shared。原 ApplicationRuntime、Graph、Event Bus 和测试保留，WorkspaceRuntime 承接新业务，旧全局 Mock 同步不再通过 Preload 开放。
+## 职责与接口
 
-## 数据模型与升级
-
-| 实体 | 用途 | 关键约束 |
+| 层 | 实际文件 | 输入 / 输出与状态 |
 | --- | --- | --- |
-| connectors | 连接器类型与能力 | ID 唯一，权限由内置宿主注册 |
-| connections | 用户添加的账户连接 | 活跃 `(connectorId, externalAccountId)` 唯一；每连接独立 credentialRef/cursor |
-| connection_data | 每连接最新余额、用量、资源状态 | connectionId 主键，严格归属、版本与结构校验 |
-| sync_jobs | 新同步引擎的持久任务 | 同连接 pending/running 部分唯一索引 |
-| business_events | 持久化业务事件 | 自增 sequence 排序、eventId 唯一、来源去重键唯一 |
-| credential_records | 系统加密后的凭据字节 | reference 唯一，不保存原文或自定义加密密钥 |
-| app_settings | 同步和启动设置 | 单例、严格 Schema |
+| Electron | `apps/desktop/src/main/index.ts`、`backend.ts` | 管理窗口、托盘、通知、文件选择、本地连接配置、会话；没有账户/SQL/Agent IPC |
+| React | `renderer/src.tsx`、`store.ts` | 展示快照和任务，Zustand 保存交互状态；Query 管理远端缓存、错误和刷新 |
+| API Client | `renderer/api/client.ts` | 统一 URL、5 秒请求超时、错误映射、DTO 校验、SSE 重连；生成类型在 `generated.ts` |
+| Router | `backend/app/api/routes.py` | Pydantic 请求/响应、分页与过滤、HTTP 状态和 SSE；不执行业务 SQL |
+| Service | `backend/app/services/` | 账户授权状态、事务编排、事件查询、Agent 入队、迁移；使用 Repository 与 ORM |
+| Repository | `backend/app/repositories/` | 查询、事件去重、账户分页、同步原子提交、数据库事务与租约检查 |
+| ORM / Migration | `models/entities.py`、`migrations/` | 约束和结构由 SQLAlchemy / Alembic 管理；不在启动时 create_all |
+| Connector | `connectors/registry.py` | Protocol + Registry + Mock；能力和最小读取权限、生命周期、标准错误、增量 SyncResult |
+| Worker | `workers/scheduler.py` | 数据库队列、定时调度、全局/账户名额、重试、租约和恢复 |
+| Agent | `agent/graph.py` | AnalysisInput → classify → explain → 结构化 Analysis，无模型和凭据 |
 
-Phase 0 的 accounts、events、sync_tasks 和旧分析保留，作为历史兼容数据；新功能统一写入连接模型，不继续写两套同步任务。版本 1 SQL 内容不变。新增版本 2 创建新表，将旧账户转换为已断开连接并保留最新数据。Activity 保留旧事件与分析入口。
+Service 内的 ORM 状态更新与 Repository 共享短事务；没有为每个简单字段建立空转发层。API/Worker 的同步 SQLite 访问仍可能短暂阻塞事件循环，当前只面向小规模本机数据，未做吞吐量评测。
 
-所有迁移与 SHA-256 记录在排他事务执行，拒绝历史 hash 变化或未知版本。Schema、迁移、契约需同步维护；已交付迁移禁止修改。CredentialStore 的密文持久化与其他业务共享 SQLite，但普通 Snapshot 查询从不查询密文表。
+## 持久模型
 
-## 账户状态与凭据生命周期
+Alembic head `0001_backend` 独立于旧 Drizzle 版本 1/2。
 
-```mermaid
-stateDiagram-v2
-  disconnected --> connecting: 添加或重新连接
-  connecting --> connected: 保存并验证模拟凭据
-  connecting --> error: 安全存储或连接失败
-  connected --> connecting: 更新模拟凭据
-  connected --> expired: 认证过期
-  connected --> error: 同步失败
-  error --> connected: 后续同步成功
-  error --> connecting: 重新连接
-  expired --> connecting: 重新连接
-  connecting --> disconnected: 断开
-  connected --> disconnected: 断开
-  expired --> disconnected: 断开
-  error --> disconnected: 断开
-```
+- `connectors`：平台类型、能力与权限。
+- `account_connections`：授权实例、状态、公开标识、凭据引用、增量 cursor、配置 revision；活动身份部分唯一。
+- `account_data`：每账户最近成功数据；金额字符串，规则用 Decimal。
+- `sync_tasks`：稳定 ID、pending/running/最终状态、尝试次数、nextAttemptAt、worker owner/fence；活动账户部分唯一。
+- `business_events`：单调 sequence、稳定 eventId、eventType、sourceId、accountId、correlationId、受限 payload、去重键与分析。
+- `secrets`：Fernet 密文及密钥版本；`app_settings`：同步设置。
+- `agent_runs`：持久进度、结果、错误和运行归属；同事件活动分析部分唯一。
+- `worker_lease`：唯一领导者、过期时间与递增 fencing token。
+- `client_sessions`：短期会话摘要、到期时间与 bootstrap 指纹，不存会话原文。
+- `legacy_records` / `legacy_secrets` / `import_records`：旧记录、不可用 OS 密文和迁移报告。
 
-Core 中纯函数描述允许的转换，Schema 同时校验状态组合：connected 必须具备凭据且无错误；connecting 不具备可用凭据且无错误；disconnected 不具备凭据；expired 对应认证过期；error 有明确错误码。同步任务状态与连接状态分开维护，页面只读取业务服务结果。
+外键开启，WAL + busy timeout，写事务 `BEGIN IMMEDIATE`。固定错误消息及 SQL 参数隐藏降低敏感信息经异常泄漏的风险。数据库业务数据未整体加密。
 
-添加账户先保存 connecting，再生成 `mock-only:` 前缀的随机模拟凭据。Renderer 只发送显示名称和公开模拟账户标识，不输入凭据。Main 中的安全适配器完成加密，随后 Core 验证可用并提交 connected 与事件。
+## 一次同步
 
-断开先在事务中禁止继续同步、记录清理意图并取消任务；再终止执行、删除密文记录、完成断开或软删除。崩溃后继续处理 cleanupPending / deleteRequested。删除连接会清除最新数据，任务和事件保留；重新添加相同标识会生成新的实例与凭据引用。
+1. POST sync 在事务中检查账户状态和活动任务，创建 pending，立即返回 202 和 taskId。
+2. Scheduler 获取/续租数据库租约，选取已到期任务；默认全局 2、同账户 1 个请求。
+3. 短事务标记 running、增加 attempts、保存 owner/fence，并写 sync.started。
+4. SecretStore 核对账户授权与 connectorId 后解密。网络/Mock 等待在事务外；返回先经 Pydantic 校验。
+5. 同一事务重新检查租约、任务、账户与 revision，提交最新数据、cursor、成功状态、data.changed 与 sync.completed。
+6. 错误映射成固定码，保留旧余额/游标；可重试错误将 nextAttemptAt 落盘。最多 3 次，1 秒起指数退避、上限 30 秒、50%–100% 抖动；模拟 Retry-After 优先，最多 1 天。
+7. 新领导者先递增 fence，再恢复旧 running；过期执行者无法提交。正常取消/断开/改配置也会阻止晚到结果提交。忽略取消的请求保留名额至退出，避免同进程中重叠。
 
-CredentialAccess 根据数据库中的当前账户、连接器注册、只读权限和引用进行校验，只在回调作用域向可信内置连接器提供凭据，拒绝把原文返回为普通结果。它是宿主内部的权限约束，不是第三方任意代码沙箱。Agent 没有凭据端口。
+事务只保证本地原子性与幂等，无法保证外部 Exactly-once。初期连接器只读。崩溃恢复依赖租约到期（默认 30 秒）；多进程共享同一 SQLite 只能部署在同一主机本地磁盘，不能借此宣称分布式集群。
 
-## 同步状态机、调度和事务
+## REST、SSE 与 Agent
 
-```mermaid
-stateDiagram-v2
-  pending --> running: 到期且取得并发名额
-  running --> succeeded: 原子保存数据与游标
-  running --> pending: 临时错误且有剩余尝试
-  running --> failed: 永久错误或次数耗尽
-  pending --> cancelled: 取消或断开
-  running --> cancelled: 取消或正常退出
-```
+历史由 REST 分页读取；SSE 轮询持久业务事件，`id` 等于 sequence，支持 `after` / Last-Event-ID。重连可能重放，客户端按 sequence 去重，再让 Query 刷新。SSE 中断不会取消任务；最终状态由 taskId / runId 查询。轮询快照每 5 秒作为展示兜底。
 
-- 请求先创建 pending 任务；`enqueue` 不等待网络，也不与 React 生命周期绑定。
-- Main 启动 Node 定时器，每 250ms 检查到期任务和自动同步计划。默认两个全局名额，每账户一个活动任务。相同创建时间按 SQLite 入队顺序处理。
-- 每次开始执行前持久化 running、尝试次数和 `sync.started`。请求有 AbortSignal 和默认 5 秒超时。
-- NETWORK、TIMEOUT、RATE_LIMITED、SERVER_ERROR 可有限重试。默认最多 3 次尝试，退避基础 1 秒、指数增长、上限 30 秒，抖动 50%–100%；Retry-After 优先，防御性最大等待 1 天。
-- 认证过期、权限不足、无效数据、安全存储错误不自动重试。认证错误进入 expired。自动调度不会持续重建永久错误的任务。
-- 重试回到 pending，nextAttemptAt 和错误落盘，等待不占用工作 Promise。忽略取消的底层请求继续占用名额，防止与下一次请求重叠；晚到响应不再提交。
-- 正常退出取消活动任务并等待受控执行结束；异常退出遗留 running，在下次启动按剩余尝试恢复只读 Mock，耗尽则标记 failed。没有外部 Exactly-once 保证。
+Agent POST 只创建持久 run。Worker 用 Python StateGraph astream 执行 classify / explain，更新 10 → 50 → 90 → 100 进度并写 Agent 事件。结果与原事件分析同事务持久化。`create_graph(checkpointer=...)` 是扩展入口；MemorySaver 仅测试，生产持久 checkpoint、工具权限、长期记忆及 HITL 尚未实现。
 
-原子提交顺序：校验任务仍在运行、账户仍授权 → 校验数据归属与版本 → 写最新数据 → 按实际内容比较产生 data.changed → 更新游标/成功时间/任务成功 → 写 sync.completed。全部在一个 SQLite 事务内。游标更新之后的事件写入失败也会回滚此前数据和游标，测试用 SQL trigger 注入该故障。
+## 安全边界
 
-Mock 持久配置包含余额、币种、用量、资源状态和故障场景，修改数据才递增 revision。游标为该演示版本。相同版本返回空增量；同内容无新提醒；A→B→A 的两次真实变化分别记录。真实平台的分页和游标语义仍需各自设计。
+客户端 bootstrap 文件只由 Main 读取（禁止符号链接、0600），短期会话只留 Main 内存。原生网络钩子只向可信窗口请求的精确后端来源 `/api/v1/` 注入会话，跨来源时清除授权头。配置新地址必须原生选择该服务的凭据文件，失败回滚配置，不自动带旧凭据到新服务。
 
-## 系统运行事件与业务事件
+Renderer 为 contextIsolation + sandbox，nodeIntegration=false；6 个固定原生方法，sender 窗口/顶层 frame/完整 URL + Zod 校验。生产 `tavo://app` 提供精确后端 connect-src CSP；禁止任意导航、弹窗、webview、权限请求。开发 HMR 只在开发源放开必需脚本与 WebSocket。
 
-Event Bus 用于进程内分发；普通函数调用和调度检查不写业务数据库。持久化事件由独立 EventRepository 管理，包含 eventId、eventType、sourceId、accountId、occurredAt、payload、correlationId、自增 sequence 和可选分析。
+后端所有业务端点认证，精确 Origin / Host / CORS、32 KiB 正文限制、固定错误响应；bootstrap 换短会话，摘要持久，旋转 bootstrap 撤销会话。第三方凭据只给受限连接器上下文，不给 Renderer 或 Agent。密钥环使用成熟 Fernet/MultiFernet，初始化/轮换取得同一数据库写锁，先发布新旧环再重加密，外部私有文件需独立保护和备份。
 
-持久事件包括 account.connected/disconnected、sync.started/completed/failed、data.changed，以及 retry_scheduled/cancelled。一次任务的所有尝试共用任务 ID 作为 correlationId。变化按连接和来源版本去重，生命周期按任务/尝试去重。sequence 是明确排序依据，不依赖时钟精度。
+本阶段只有单所有者信任域；没有用户角色和租户隔离、生产 HTTPS 终止、认证限流审计、专用 KMS、密钥恢复 UI、数据库整体加密。Compose 只映射宿主回环端口，不能直接公开部署。
 
-事务成功后发布 `business.persisted`；观察者错误不改变已提交结果。进程在提交后、通知前崩溃时，持久记录仍在，但内存通知不保证重放；未来自动触发 Agent 需另加持久消费者进度和幂等，当前没有实现该机制。
+## 兼容与回滚
 
-保留的手动 Graph 仅接收从 data.changed 转换的白名单事件，运行 classify → explain，无网络和工具权限。分析保存于业务事件；旧余额事件仍走旧分析接口。MemorySaver 仍只用于测试，不是生产持久 checkpoint。
+旧 Core/Storage/Connector/JS Agent、业务 IPC/safeStorage 适配器及重复 legacy 归档已按用户要求从工作区删除，原实现与学习注释保存在 Git 基线 `898328d`。Python 图已通过等价测试。当前共享契约为 `packages/shared/src/contracts.ts` 与 `workspace.ts`；只保留当前客户端校验和导入历史需要的数据形状，不保留 TS 业务存储/凭据/连接器接口。旧 SQL 原样保留在 `backend/tests/fixtures/legacy/`，哈希校验和 Python 迁移测试继续执行。清理范围见 `LEGACY_CLEANUP.md`。
 
-## IPC 与界面
-
-Preload 只暴露 snapshot、analyze、addConnection、disconnect、removeConnection、reconnect、syncConnection、cancelSync、configureMock、updateSettings。没有通用 channel / SQL / 文件 / Shell / 凭据读取接口。Main 校验窗口所有权、主框架、精确 URL 和严格 Zod；Core 入口再校验业务参数与状态。
-
-Renderer 使用 Zustand 缓存快照，约每 750ms 刷新展示；调度器即使关闭窗口仍在 Main 运行。Overview 显示计数、数据、最近事件；Connections 管理连接与 Mock 配置；Activity 显示任务、事件关联和旧历史；Settings 控制自动同步、间隔与下次启动隐藏窗口。所有页面提供加载、空、错误状态。启动隐藏窗口可通过 Dock 再显示；没有实现开机自启。
-
-Renderer 维持 sandbox/contextIsolation/webSecurity、禁用 nodeIntegration；阻止导航、webview、弹窗和权限请求。生产 CSP 禁止外网与内联脚本，开发仅为本地 Vite HMR 放宽规则。
-
-## 安全存储平台边界与限制
-
-macOS / Windows 使用当前 Electron 的异步 safeStorage；Linux 为能核验后端，使用明确系统密钥后端对应的同步 API，拒绝 basic_text 和 unknown，不设置明文开关。同步 Linux API 的生命周期需在升级 Electron 前重新核对。每次读写都重新检查可用性；界面状态是启动检测结果。
-
-macOS 保护依赖 Keychain 和稳定应用签名；Windows DPAPI 不隔离同一用户的所有进程；Linux 安全性依赖实际桌面密钥服务。当前只有 macOS ARM64 做了实际系统读写和打包后重启测试，其他策略通过替身验证。依据：[Electron safeStorage](https://www.electronjs.org/docs/latest/api/safe-storage)。
-
-数据库访问暂为 Main 内同步调用；只验证小规模 Mock。Snapshot 限制为 200 连接/数据、200 任务、300 事件，无历史分页、归档和整体数据库加密。无法取消的请求可能占满工作名额，需要其结束或重启。尚未对跨进程 Worker、真实平台权限、系统休眠、签名安装与大规模性能做验证。
+旧数据库使用一致性备份后导入独立目标，不修改源。无法解密的 OS 密文原样保留、账户断开等待重新授权；旧 pending/running 同步取消，原状态保留迁移记录。回滚保留新数据与密钥，使用 Git 基线与原旧库；新数据没有自动反向转换。实际结果与命令见 `REFACTOR_REPORT.md`。

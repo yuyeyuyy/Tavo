@@ -1,5 +1,7 @@
 # Tavo V1 开发方案（Codex 边开发边学习版）
 
+> 2026-11-13 架构调整：用户已授权 Electron/React 客户端 + 独立 Python/FastAPI 服务端，当前实现以 ARCHITECTURE.md / REFACTOR_PLAN.md 为准。下文 Node Core、Drizzle、safeStorage、LangGraph.js 方案保留为原始规划记录。后端持续运行时桌面退出仍可同步；电脑休眠或后端停止不保证监控。真实连接器与大型 Agent 仍未授权。
+
 > 版本：V1 规划稿｜目标：macOS 桌面端优先，后续 Windows；Local-first；可开源；预留 Headless Runtime 能力。
 >
 > 定位：开源、可扩展、主动式个人数字账户 Agent（Proactive Personal Agent）。

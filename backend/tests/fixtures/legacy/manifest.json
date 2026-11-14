@@ -1,0 +1,12 @@
+{
+  "phase0.sql": {
+    "version": 1,
+    "sha256": "41cdb86956877f7698ced9affefe6022e6c1a00144d30eb428ba6d294b5cf616",
+    "source": "898328d:packages/storage/src/migrations.ts"
+  },
+  "phase1.sql": {
+    "version": 2,
+    "sha256": "ba3cf589e93373e683f28c54cb957831aee505b4f37b339b38cc7c57f14e4448",
+    "source": "898328d:packages/storage/src/phase1-migration.ts"
+  }
+}

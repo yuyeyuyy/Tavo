@@ -1,35 +1,37 @@
+import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { create } from 'zustand';
-import type { Response, Snapshot } from '@tavo/shared';
+import { AppError, publicError, type Response, type Snapshot } from '@tavo/shared';
+import { api } from './api/client';
+import { queryClient } from './api/query';
 
-interface DashboardState {
-  data: Snapshot | null;
-  busy: boolean;
-  error: string | null;
-  perform: (action: () => Promise<Response>) => Promise<boolean>;
-  refresh: () => Promise<void>;
+// Zustand 仅保存交互状态；服务端数据由 TanStack Query 缓存。
+export const useUI = create<{ busy: boolean; error: string | null; streamConnected: boolean }>(() => ({ busy: false, error: null, streamConnected: false }));
+const refresh = async () => { await queryClient.invalidateQueries(); };
+const perform = async (action: () => Promise<Response>): Promise<boolean> => {
+  if (useUI.getState().busy) return false;
+  useUI.setState({ busy: true, error: null });
+  try {
+    const result = await action();
+    if (result.ok) { queryClient.setQueryData(['snapshot'], result.data); await refresh(); return true; }
+    useUI.setState({ error: result.error.message }); await refresh(); return false;
+  } catch (error) { useUI.setState({ error: publicError(error).message }); return false; }
+  finally { useUI.setState({ busy: false }); }
+};
+export function useDashboard() {
+  const ui = useUI();
+  const query = useQuery({ queryKey: ['snapshot'], queryFn: ({ signal }) => api.getSnapshot(signal), refetchInterval: 5000 });
+  return { ...ui, data: query.data ?? null, offline: query.isError, loading: query.isPending, error: ui.error ?? (query.error ? publicError(query.error instanceof AppError ? query.error : new AppError('BACKEND_UNAVAILABLE')).message : null), perform, refresh };
 }
-// 只缓存展示状态；持久化的唯一事实来源为 Core / SQLite。
-export const useDashboard = create<DashboardState>((set, get) => ({
-  data: null, busy: false, error: null,
-  refresh: async () => {
-    if (get().busy) return;
-    try { const result = await window.tavo.snapshot(); if (result.ok && !get().busy) set({ data: result.data }); else if (!result.ok) set({ error: result.error.message }); }
-    catch { set({ error: '无法连接本地服务，请重新启动应用。' }); }
-  },
-  perform: async (action) => {
-    if (get().busy) return false;
-    set({ busy: true, error: null });
-    try {
-      const result = await action();
-      if (result.ok) { set({ data: result.data }); return true; }
-      else {
-        set({ error: result.error.message });
-        // 同步失败也刷新已落盘的任务状态；保留最后一次成功的账户数据。
-        const latest = await window.tavo.snapshot();
-        if (latest.ok) set({ data: latest.data });
-      }
-    } catch { set({ error: '无法连接本地服务，请重新启动应用。' }); }
-    finally { set({ busy: false }); }
-    return false;
-  },
-}));
+export function useBackendEvents(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    const controller = new AbortController(); let timer: ReturnType<typeof setTimeout> | undefined;
+    const initial = queryClient.getQueryData<Snapshot>(['snapshot']);
+    const sequence = Math.max(0, ...(initial?.businessEvents.map((event) => event.sequence) ?? []));
+    void api.subscribe(sequence, controller.signal, () => {
+      if (!timer) timer = setTimeout(() => { timer = undefined; void refresh(); }, 100);
+    }, (connected) => useUI.setState({ streamConnected: connected }));
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [enabled]);
+}

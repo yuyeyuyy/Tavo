@@ -1,3 +1,5 @@
+> 历史资料：以下文件路径和测试计数对应旧架构。旧代码已清理，可在 Git 基线 `898328d` 查看；当前入口见 ARCHITECTURE.md / LEARNING_NOTES.md，清理说明见 LEGACY_CLEANUP.md。
+
 # Tavo Phase 1 交付报告
 
 日期：2026-11-13。增量构建于 Phase 0。所有账户、凭据和外部错误均为 Mock；没有访问真实第三方账户。
