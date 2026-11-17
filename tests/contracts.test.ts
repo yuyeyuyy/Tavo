@@ -1,39 +1,35 @@
-import { describe, expect, it } from 'vitest';
-import { connectionSchema, snapshotSchema } from '@tavo/shared';
+import { describe,expect,it } from 'vitest';
+import { messageSchema,runSchema,sessionSchema,sessionCreateSchema,decisionWriteSchema,messageWriteSchema } from '../apps/desktop/src/renderer/api/sessions';
+const at='2026-11-16T00:00:00.000Z';
+const base={id:'message-1',sessionId:'session-1',runId:'run-1',sequence:1,createdAt:at};
+describe('Session Agent public contracts',()=>{
+  it('accepts the typed message union and rejects provider/private data in public messages',()=>{
+    const user={...base,kind:'user',content:'hello'};
+    expect(messageSchema.parse(user)).toEqual(user);
+    for(const field of ['ciphertext','native','apiKey','reasoningContent']) expect(messageSchema.safeParse({...user,[field]:'synthetic'}).success).toBe(false);
+    expect(messageSchema.safeParse({...base,kind:'assistant',content:'text',final:true,truncated:false,usage:null}).success).toBe(true);
+    expect(messageSchema.safeParse({...base,kind:'tool_result',content:'forged'}).success).toBe(false);
+  });
+  it('separates user requests from authoritative assistant/tool/decision fields',()=>{
+    const value={clientMessageId:'client-1',content:'hello',expectedRevision:0};
+    expect(messageWriteSchema.safeParse(value).success).toBe(true);
+    expect(messageWriteSchema.safeParse({...value,role:'assistant'}).success).toBe(false);
+    expect(decisionWriteSchema.safeParse({action:'approve',expectedRevision:1,arguments:{changed:true}}).success).toBe(false);
+  });
+  it('keeps authentication tokens and unbounded context out of Session/run DTOs',()=>{
+    const session={id:'session-1',title:'Hello',profileId:'mock',reviewMode:'ask',revision:0,createdAt:at,updatedAt:at,activeRunId:null,latestRunId:null};
+    expect(sessionSchema.safeParse(session).success).toBe(true);
+    expect(sessionSchema.safeParse({...session,accessToken:'synthetic'}).success).toBe(false);
+    const run={id:'run-1',sessionId:'session-1',userMessageId:'message-1',previousRunId:null,status:'pending',step:'model',rounds:0,toolCount:0,revision:1,createdAt:at,startedAt:null,finishedAt:null,errorCode:null,context:null,toolCalls:[]};
+    expect(runSchema.safeParse(run).success).toBe(true);
+    expect(runSchema.safeParse({...run,context:{policyVersion:'1',fromSequence:1,toSequence:1,droppedTurns:0,contextBytes:1048577,toolNames:[]}}).success).toBe(false);
+  });
+});
 
-const at = '2026-11-12T00:00:00.000Z';
-const connection = {
-  id: 'account-1', connectorId: 'mock', externalAccountId: 'demo-a', displayName: 'Mock A',
-  status: 'connected', credentialConfigured: true, lastSyncAt: null, nextSyncAt: null,
-  errorCode: null, createdAt: at,
-  mock: { balance: '8.50', currency: 'USD', usageUnits: 100, resourceStatus: 'healthy', scenario: 'success' },
-};
-
-describe('current client contracts after legacy runtime removal', () => {
-  it('rejects credential material in a public connection response', () => {
-    expect(connectionSchema.safeParse(connection).success).toBe(true);
-    for (const field of ['credentialRef', 'ciphertext', 'credential']) {
-      expect(connectionSchema.safeParse({ ...connection, [field]: 'synthetic-private-value' }).success).toBe(false);
-    }
-  });
-  it.each([
-    { status: 'connected', credentialConfigured: false },
-    { status: 'disconnected', credentialConfigured: true },
-    { status: 'expired', errorCode: null },
-    { status: 'error', errorCode: null },
-  ])('rejects inconsistent account state %#', (invalid) => {
-    expect(connectionSchema.safeParse({ ...connection, ...invalid }).success).toBe(false);
-  });
-  it('keeps imported historical accounts, tasks and analysis readable', () => {
-    const analysis = { eventId: 'old-event', severity: 'info', summary: 'Mock summary', evidence: ['Mock evidence'], recommendation: 'Mock recommendation', mode: 'deterministic-mock' };
-    const input = {
-      connectors: [], connections: [], data: [], jobs: [], businessEvents: [],
-      accounts: [{ id: 'old-account', connectorId: 'mock', providerAccountId: 'old', name: 'Imported Mock', balance: '12.00', currency: 'USD', updatedAt: at, source: 'mock' }],
-      events: [{ id: 'old-event', connectorId: 'mock', accountId: 'old-account', providerEventId: 'provider-old', kind: 'balance.observed', balance: '12.00', currency: 'USD', occurredAt: at, source: 'mock', analysis }],
-      tasks: [{ id: 'old-task', connectorId: 'mock', status: 'succeeded', startedAt: at, finishedAt: at, errorCode: null }],
-      settings: { autoSync: false, syncIntervalSeconds: 300, startMinimized: false },
-      security: { available: true, backend: 'Fernet keyring (server)', dataLocation: '/server/data' },
-    };
-    expect(snapshotSchema.parse(input)).toEqual(input);
-  });
+it('keeps Bash capability explicit and requires a boolean', () => {
+  expect(sessionCreateSchema.safeParse({profileId:'mock',reviewMode:'auto_sandbox',bashEnabled:'true'}).success).toBe(false);
+  expect(sessionCreateSchema.parse({profileId:'mock',reviewMode:'auto_sandbox',bashEnabled:true}).bashEnabled).toBe(true);
+  for (const reviewMode of ['full_access', 'auto_review', 'request_approval']) {
+    expect(sessionCreateSchema.parse({profileId:'mock',reviewMode}).reviewMode).toBe(reviewMode);
+  }
 });

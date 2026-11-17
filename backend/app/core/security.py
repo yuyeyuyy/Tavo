@@ -10,11 +10,11 @@ from uuid import uuid4
 
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from pydantic import SecretStr
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 
 from app.core.config import Settings, utcnow
 from app.core.errors import AppError, Code
-from app.models.entities import Account, ClientSession, Secret
+from app.models.entities import AssistantModelTurn, ClientSession, SandboxNetworkRequest, Secret
 from app.repositories.database import Database
 from app.repositories.time import plus_seconds
 
@@ -108,34 +108,6 @@ class SecretStore:
         else:
             session.add(Secret(reference=reference, ciphertext=ciphertext, key_id=key_id))
 
-    def for_connector(self, account_id: str, connector_id: str) -> SecretStr:
-        with self.db.session(write=True) as session:
-            account = session.get(Account, account_id)
-            if (
-                not account
-                or account.deleted_at
-                or account.status not in {"connected", "error"}
-                or not account.credential_configured
-                or account.connector_id != connector_id
-            ):
-                raise AppError(Code.FORBIDDEN)
-            row = session.get(Secret, account.credential_ref)
-            if not row:
-                raise AppError(Code.CREDENTIAL_UNAVAILABLE)
-            key_id, ring = self.ring()
-            try:
-                value = ring.decrypt(row.ciphertext).decode()
-            except (InvalidToken, UnicodeDecodeError):
-                raise AppError(Code.CREDENTIAL_UNAVAILABLE) from None
-            if row.key_id != key_id:
-                original = row.ciphertext
-                session.execute(
-                    update(Secret)
-                    .where(Secret.reference == row.reference, Secret.ciphertext == original)
-                    .values(ciphertext=ring.rotate(original), key_id=key_id)
-                )
-            return SecretStr(value)
-
     def rotate(self):
         with self.db.session(write=True) as session:
             # Serialize the read/publish/reencrypt sequence across processes.
@@ -147,9 +119,28 @@ class SecretStore:
             value["keys"].insert(0, {"id": uuid4().hex, "key": Fernet.generate_key().decode()})
             private_write(self.settings.keyring_file, json.dumps(value).encode())
             key_id, ring = self.ring()
-            for row in session.scalars(select(Secret)):
+            rows = [
+                *session.scalars(select(Secret)),
+                *session.scalars(
+                    select(AssistantModelTurn).where(AssistantModelTurn.ciphertext.is_not(None))
+                ),
+                *session.scalars(select(SandboxNetworkRequest)),
+            ]
+            for row in rows:
                 try:
                     row.ciphertext, row.key_id = ring.rotate(row.ciphertext), key_id
+                except InvalidToken:
+                    raise AppError(Code.CREDENTIAL_UNAVAILABLE) from None
+            for row in session.scalars(
+                select(SandboxNetworkRequest).where(
+                    SandboxNetworkRequest.result_ciphertext.is_not(None)
+                )
+            ):
+                try:
+                    row.result_ciphertext, row.result_key_id = (
+                        ring.rotate(row.result_ciphertext),
+                        key_id,
+                    )
                 except InvalidToken:
                     raise AppError(Code.CREDENTIAL_UNAVAILABLE) from None
 

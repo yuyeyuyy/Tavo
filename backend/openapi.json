@@ -88,6 +88,16 @@
             },
             "description": "Conflict"
           },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
           "413": {
             "content": {
               "application/json": {
@@ -196,6 +206,16 @@
               }
             }
           },
+          "410": {
+            "description": "Gone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "413": {
             "description": "Request Entity Too Large",
             "content": {
@@ -246,8 +266,8 @@
     },
     "/api/v1/system/status": {
       "get": {
-        "summary": "System Status",
-        "operationId": "system_status_api_v1_system_status_get",
+        "summary": "Status",
+        "operationId": "status_api_v1_system_status_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -309,6 +329,16 @@
               }
             }
           },
+          "410": {
+            "description": "Gone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "413": {
             "description": "Request Entity Too Large",
             "content": {
@@ -357,27 +387,17 @@
         ]
       }
     },
-    "/api/v1/snapshot": {
+    "/api/v1/chat/models": {
       "get": {
-        "summary": "Snapshot",
-        "operationId": "snapshot_api_v1_snapshot_get",
+        "summary": "Models",
+        "operationId": "models_api_v1_chat_models_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Snapshot"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/ModelCatalog"
                 }
               }
             }
@@ -402,28 +422,8 @@
               }
             }
           },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "409": {
             "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request Entity Too Large",
             "content": {
               "application/json": {
                 "schema": {
@@ -442,8 +442,18 @@
               }
             }
           },
-          "500": {
-            "description": "Internal Server Error",
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
             "content": {
               "application/json": {
                 "schema": {
@@ -461,1579 +471,9 @@
                 }
               }
             }
-          }
-        },
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ]
-      }
-    },
-    "/api/v1/accounts": {
-      "get": {
-        "summary": "Accounts",
-        "operationId": "accounts_api_v1_accounts_get",
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limit"
-            }
           },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "disconnected",
-                    "connecting",
-                    "connected",
-                    "expired",
-                    "error"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Status"
-            }
-          },
-          {
-            "name": "connectorId",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "maxLength": 120
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Connectorid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountPage"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      },
-      "post": {
-        "summary": "Add Account",
-        "operationId": "add_account_api_v1_accounts_post",
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddAccount"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountOut"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      }
-    },
-    "/api/v1/accounts/{account_id}": {
-      "get": {
-        "summary": "Account",
-        "operationId": "account_api_v1_accounts__account_id__get",
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Account Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountOut"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      },
-      "delete": {
-        "summary": "Remove Account",
-        "operationId": "remove_account_api_v1_accounts__account_id__delete",
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Account Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      }
-    },
-    "/api/v1/accounts/{account_id}/disconnect": {
-      "post": {
-        "summary": "Disconnect",
-        "operationId": "disconnect_api_v1_accounts__account_id__disconnect_post",
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Account Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountOut"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      }
-    },
-    "/api/v1/accounts/{account_id}/reconnect": {
-      "post": {
-        "summary": "Reconnect",
-        "operationId": "reconnect_api_v1_accounts__account_id__reconnect_post",
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Account Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountOut"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      }
-    },
-    "/api/v1/accounts/{account_id}/mock": {
-      "patch": {
-        "summary": "Mock",
-        "operationId": "mock_api_v1_accounts__account_id__mock_patch",
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Account Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MockConfig"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountOut"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      }
-    },
-    "/api/v1/accounts/{account_id}/sync": {
-      "post": {
-        "summary": "Sync",
-        "operationId": "sync_api_v1_accounts__account_id__sync_post",
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Account Id"
-            }
-          }
-        ],
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskOut"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      }
-    },
-    "/api/v1/accounts/{account_id}/sync/cancel": {
-      "post": {
-        "summary": "Cancel",
-        "operationId": "cancel_api_v1_accounts__account_id__sync_cancel_post",
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Account Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      }
-    },
-    "/api/v1/sync-tasks": {
-      "get": {
-        "summary": "Tasks",
-        "operationId": "tasks_api_v1_sync_tasks_get",
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          },
-          {
-            "name": "accountId",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "maxLength": 120
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Accountid"
-            }
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "pending",
-                    "running",
-                    "succeeded",
-                    "failed",
-                    "cancelled"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Status"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskPage"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      }
-    },
-    "/api/v1/sync-tasks/{task_id}": {
-      "get": {
-        "summary": "Task",
-        "operationId": "task_api_v1_sync_tasks__task_id__get",
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "task_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Task Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskOut"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      }
-    },
-    "/api/v1/connectors": {
-      "get": {
-        "summary": "Connectors",
-        "operationId": "connectors_api_v1_connectors_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ConnectorOut"
-                  },
-                  "type": "array",
-                  "title": "Response Connectors Api V1 Connectors Get"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request Entity Too Large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
+          "504": {
+            "description": "Gateway Timeout",
             "content": {
               "application/json": {
                 "schema": {
@@ -2050,250 +490,15 @@
         ]
       }
     },
-    "/api/v1/connectors/{connector_id}/capabilities": {
-      "get": {
-        "summary": "Capabilities",
-        "operationId": "capabilities_api_v1_connectors__connector_id__capabilities_get",
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "connector_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Connector Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConnectorOut"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      }
-    },
-    "/api/v1/settings": {
-      "get": {
-        "summary": "Settings",
-        "operationId": "settings_api_v1_settings_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AppSettings"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request Entity Too Large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ]
-      },
-      "patch": {
-        "summary": "Update Settings",
-        "operationId": "update_settings_api_v1_settings_patch",
+    "/api/v1/chat/completions": {
+      "post": {
+        "summary": "Completion",
+        "operationId": "completion_api_v1_chat_completions_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AppSettings"
+                "$ref": "#/components/schemas/ChatRequest"
               }
             }
           },
@@ -2305,17 +510,523 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AppSettings"
+                  "$ref": "#/components/schemas/ChatReply"
                 }
               }
             }
           },
-          "400": {
-            "description": "Bad Request",
+          "401": {
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Gateway Timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/secret-submissions/challenges": {
+      "post": {
+        "summary": "Challenge",
+        "operationId": "challenge_api_v1_secret_submissions_challenges_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChallengeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/secret-submissions": {
+      "post": {
+        "summary": "Submit",
+        "operationId": "submit_api_v1_secret_submissions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretSubmission"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionAck"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/model-providers": {
+      "get": {
+        "summary": "Providers",
+        "operationId": "providers_api_v1_model_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/model-profiles": {
+      "get": {
+        "summary": "Profiles",
+        "operationId": "profiles_api_v1_model_profiles_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelProfileList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create",
+        "operationId": "create_api_v1_model_profiles_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelProfileCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelProfileOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sandbox-network-targets": {
+      "get": {
+        "summary": "Network Targets",
+        "operationId": "network_targets_api_v1_sandbox_network_targets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkTargetList"
                 }
               }
             }
@@ -2360,6 +1071,16 @@
               }
             }
           },
+          "410": {
+            "description": "Gone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "413": {
             "description": "Request Entity Too Large",
             "content": {
@@ -2372,16 +1093,6 @@
           },
           "422": {
             "description": "Unprocessable Entity",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -2408,10 +1119,347 @@
         ]
       }
     },
-    "/api/v1/events": {
+    "/api/v1/sessions/{session_id}/tool-calls/{call_id}/approval": {
       "get": {
-        "summary": "Events",
-        "operationId": "events_api_v1_events_get",
+        "summary": "Approval Preview",
+        "operationId": "approval_preview_api_v1_sessions__session_id__tool_calls__call_id__approval_get",
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Call Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalPreview"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/tools": {
+      "get": {
+        "summary": "Tools",
+        "operationId": "tools_api_v1_tools_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Gone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions": {
+      "post": {
+        "summary": "Create",
+        "operationId": "create_api_v1_sessions_post",
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      },
+      "get": {
+        "summary": "Sessions",
+        "operationId": "sessions_api_v1_sessions_get",
         "security": [
           {
             "ClientSession": []
@@ -2424,14 +1472,288 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 300,
+              "maximum": 100,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}": {
+      "get": {
+        "summary": "Session",
+        "operationId": "session_api_v1_sessions__session_id__get",
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/messages": {
+      "get": {
+        "summary": "Messages",
+        "operationId": "messages_api_v1_sessions__session_id__messages_get",
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
               "minimum": 1,
               "default": 50,
               "title": "Limit"
             }
           },
           {
-            "name": "before",
+            "name": "afterSequence",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Aftersequence"
+            }
+          },
+          {
+            "name": "beforeSequence",
             "in": "query",
             "required": false,
             "schema": {
@@ -2444,71 +1766,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Before"
-            }
-          },
-          {
-            "name": "accountId",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "maxLength": 120
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Accountid"
-            }
-          },
-          {
-            "name": "correlationId",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "maxLength": 120
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Correlationid"
-            }
-          },
-          {
-            "name": "eventType",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "account.connected",
-                    "account.disconnected",
-                    "sync.started",
-                    "sync.completed",
-                    "sync.failed",
-                    "data.changed",
-                    "sync.retry_scheduled",
-                    "sync.cancelled",
-                    "agent.started",
-                    "agent.progress",
-                    "agent.completed",
-                    "agent.failed"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Eventtype"
+              "title": "Beforesequence"
             }
           }
         ],
@@ -2518,20 +1776,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EventPage"
+                  "$ref": "#/components/schemas/MessagePage"
                 }
               }
             }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
           },
           "401": {
             "content": {
@@ -2573,6 +1821,16 @@
             },
             "description": "Conflict"
           },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
           "413": {
             "content": {
               "application/json": {
@@ -2593,16 +1851,6 @@
             },
             "description": "Unprocessable Entity"
           },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
           "503": {
             "content": {
               "application/json": {
@@ -2614,12 +1862,10 @@
             "description": "Service Unavailable"
           }
         }
-      }
-    },
-    "/api/v1/events/stream": {
-      "get": {
-        "summary": "Stream",
-        "operationId": "stream_api_v1_events_stream_get",
+      },
+      "post": {
+        "summary": "Send",
+        "operationId": "send_api_v1_sessions__session_id__messages_post",
         "security": [
           {
             "ClientSession": []
@@ -2627,149 +1873,24 @@
         ],
         "parameters": [
           {
-            "name": "after",
-            "in": "query",
-            "required": false,
+            "name": "session_id",
+            "in": "path",
+            "required": true,
             "schema": {
-              "type": "integer",
-              "maximum": 9223372036854775807,
-              "minimum": 0,
-              "default": 0,
-              "title": "After"
-            }
-          },
-          {
-            "name": "Last-Event-ID",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Last-Event-Id"
+              "type": "string",
+              "title": "Session Id"
             }
           }
         ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      }
-    },
-    "/api/v1/agent/analyze": {
-      "post": {
-        "summary": "Analyze",
-        "operationId": "analyze_api_v1_agent_analyze_post",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AnalyzeRequest"
+                "$ref": "#/components/schemas/UserMessageWrite"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "202": {
@@ -2777,163 +1898,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RunOut"
+                  "$ref": "#/components/schemas/MessageAccepted"
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request Entity Too Large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ]
-      }
-    },
-    "/api/v1/agent/runs": {
-      "get": {
-        "summary": "Runs",
-        "operationId": "runs_api_v1_agent_runs_get",
-        "security": [
-          {
-            "ClientSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunPage"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
           },
           "401": {
             "content": {
@@ -2975,6 +1943,16 @@
             },
             "description": "Conflict"
           },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
           "413": {
             "content": {
               "application/json": {
@@ -2995,16 +1973,6 @@
             },
             "description": "Unprocessable Entity"
           },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
           "503": {
             "content": {
               "application/json": {
@@ -3018,16 +1986,25 @@
         }
       }
     },
-    "/api/v1/agent/runs/{run_id}": {
+    "/api/v1/sessions/{session_id}/runs/{run_id}": {
       "get": {
         "summary": "Run",
-        "operationId": "run_api_v1_agent_runs__run_id__get",
+        "operationId": "run_api_v1_sessions__session_id__runs__run_id__get",
         "security": [
           {
             "ClientSession": []
           }
         ],
         "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
           {
             "name": "run_id",
             "in": "path",
@@ -3044,20 +2021,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RunOut"
+                  "$ref": "#/components/schemas/Run"
                 }
               }
             }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
           },
           "401": {
             "content": {
@@ -3099,6 +2066,16 @@
             },
             "description": "Conflict"
           },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
           "413": {
             "content": {
               "application/json": {
@@ -3119,7 +2096,7 @@
             },
             "description": "Unprocessable Entity"
           },
-          "500": {
+          "503": {
             "content": {
               "application/json": {
                 "schema": {
@@ -3127,7 +2104,120 @@
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/runs/{run_id}/cancel": {
+      "post": {
+        "summary": "Cancel",
+        "operationId": "cancel_api_v1_sessions__session_id__runs__run_id__cancel_post",
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -3141,32 +2231,726 @@
           }
         }
       }
+    },
+    "/api/v1/sessions/{session_id}/runs/{run_id}/retry": {
+      "post": {
+        "summary": "Retry",
+        "operationId": "retry_api_v1_sessions__session_id__runs__run_id__retry_post",
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/tool-calls/{call_id}/decision": {
+      "post": {
+        "summary": "Decide",
+        "operationId": "decide_api_v1_sessions__session_id__tool_calls__call_id__decision_post",
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Call Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Decision"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/agent-runtime": {
+      "get": {
+        "summary": "Runtime",
+        "operationId": "runtime_api_v1_agent_runtime_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRuntime"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Gone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ClientSession": []
+          }
+        ]
+      }
     }
   },
   "components": {
     "schemas": {
-      "AccountOut": {
+      "AgentRuntime": {
         "properties": {
-          "connectorId": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Connectorid"
+          "pool": {
+            "$ref": "#/components/schemas/PoolStatus"
           },
-          "externalAccountId": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Externalaccountid"
+          "bash": {
+            "$ref": "#/components/schemas/BashStatus"
           },
-          "displayName": {
+          "hostBash": {
+            "$ref": "#/components/schemas/HostBashStatus"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "pool",
+          "bash",
+          "hostBash"
+        ],
+        "title": "AgentRuntime"
+      },
+      "ApprovalPreview": {
+        "properties": {
+          "kind": {
             "type": "string",
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Displayname"
+            "enum": [
+              "network",
+              "workspace_commit"
+            ],
+            "title": "Kind"
           },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Digest"
+          },
+          "details": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "description",
+          "digest",
+          "details"
+        ],
+        "title": "ApprovalPreview"
+      },
+      "BashStatus": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "reasonCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoncode"
+          },
+          "workspacePolicy": {
+            "type": "string",
+            "const": "session-volume",
+            "title": "Workspacepolicy",
+            "default": "session-volume"
+          },
+          "externalNetwork": {
+            "type": "boolean",
+            "title": "Externalnetwork",
+            "default": false
+          },
+          "networkPolicy": {
+            "type": "string",
+            "enum": [
+              "none",
+              "proxy"
+            ],
+            "title": "Networkpolicy",
+            "default": "none"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled",
+          "available",
+          "reasonCode"
+        ],
+        "title": "BashStatus"
+      },
+      "ChallengeOut": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Version",
+            "default": 1
+          },
+          "challengeId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{32}$",
+            "title": "Challengeid"
+          },
+          "expiresAt": {
+            "type": "string",
+            "title": "Expiresat"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "model.api_key",
+              "sandbox.api_key"
+            ],
+            "title": "Purpose"
+          },
+          "resourceId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "title": "Resourceid"
+          },
+          "credentialRevision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Credentialrevision"
+          },
+          "kid": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{32}$",
+            "title": "Kid"
+          },
+          "publicJwk": {
+            "$ref": "#/components/schemas/PublicJWK"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "challengeId",
+          "expiresAt",
+          "purpose",
+          "resourceId",
+          "credentialRevision",
+          "kid",
+          "publicJwk"
+        ],
+        "title": "ChallengeOut"
+      },
+      "ChallengeRequest": {
+        "properties": {
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "model.api_key",
+              "sandbox.api_key"
+            ],
+            "title": "Purpose"
+          },
+          "resourceId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "title": "Resourceid"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expectedrevision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "purpose",
+          "resourceId",
+          "expectedRevision"
+        ],
+        "title": "ChallengeRequest"
+      },
+      "ChatMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 16000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage"
+      },
+      "ChatReply": {
+        "properties": {
+          "profileId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "title": "Profileid"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "anthropic",
+              "gemini",
+              "deepseek",
+              "qwen",
+              "kimi",
+              "zhipu",
+              "openrouter",
+              "xai"
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9._:/-]+$",
+            "title": "Model"
+          },
+          "message": {
+            "$ref": "#/components/schemas/app__llm__contracts__AssistantMessage"
+          },
+          "finishReason": {
+            "type": "string",
+            "enum": [
+              "stop",
+              "length"
+            ],
+            "title": "Finishreason"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TokenUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profileId",
+          "provider",
+          "model",
+          "message",
+          "finishReason",
+          "truncated"
+        ],
+        "title": "ChatReply"
+      },
+      "ChatRequest": {
+        "properties": {
+          "profileId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "title": "Profileid"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Messages"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profileId",
+          "messages"
+        ],
+        "title": "ChatRequest"
+      },
+      "ContextSummary": {
+        "properties": {
+          "policyVersion": {
+            "type": "string",
+            "title": "Policyversion"
+          },
+          "fromSequence": {
+            "type": "integer",
+            "title": "Fromsequence"
+          },
+          "toSequence": {
+            "type": "integer",
+            "title": "Tosequence"
+          },
+          "droppedTurns": {
+            "type": "integer",
+            "title": "Droppedturns"
+          },
+          "contextBytes": {
+            "type": "integer",
+            "title": "Contextbytes"
+          },
+          "toolNames": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Toolnames"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "policyVersion",
+          "fromSequence",
+          "toSequence",
+          "droppedTurns",
+          "contextBytes",
+          "toolNames"
+        ],
+        "title": "ContextSummary"
+      },
+      "Decision": {
+        "properties": {
           "id": {
             "type": "string",
             "maxLength": 120,
@@ -3174,353 +2958,98 @@
             "pattern": "^[a-zA-Z0-9:_-]+$",
             "title": "Id"
           },
-          "status": {
+          "toolCallId": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Toolcallid"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "action": {
             "type": "string",
             "enum": [
-              "disconnected",
-              "connecting",
-              "connected",
-              "expired",
-              "error"
+              "allow",
+              "deny",
+              "ask"
             ],
-            "title": "Status"
+            "title": "Action"
           },
-          "credentialConfigured": {
-            "type": "boolean",
-            "title": "Credentialconfigured"
+          "source": {
+            "type": "string",
+            "enum": [
+              "policy",
+              "human",
+              "model",
+              "mock"
+            ],
+            "title": "Source"
           },
-          "lastSyncAt": {
+          "reasonCode": {
+            "type": "string",
+            "title": "Reasoncode"
+          },
+          "summary": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 240
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Lastsyncat"
+            "title": "Summary"
           },
-          "nextSyncAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Nextsyncat"
-          },
-          "errorCode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Errorcode"
+          "policyVersion": {
+            "type": "string",
+            "title": "Policyversion",
+            "default": "1"
           },
           "createdAt": {
             "type": "string",
             "title": "Createdat"
-          },
-          "mock": {
-            "$ref": "#/components/schemas/MockConfig"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "connectorId",
-          "externalAccountId",
-          "displayName",
-          "id",
-          "status",
-          "credentialConfigured",
-          "lastSyncAt",
-          "nextSyncAt",
-          "errorCode",
-          "createdAt",
-          "mock"
-        ],
-        "title": "AccountOut"
-      },
-      "AccountPage": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/AccountOut"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "limit": {
-            "type": "integer",
-            "title": "Limit"
-          },
-          "offset": {
-            "type": "integer",
-            "title": "Offset"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "items",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "title": "AccountPage"
-      },
-      "AddAccount": {
-        "properties": {
-          "connectorId": {
-            "type": "string",
-            "const": "mock",
-            "title": "Connectorid"
-          },
-          "externalAccountId": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Externalaccountid"
-          },
-          "displayName": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Displayname"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "connectorId",
-          "externalAccountId",
-          "displayName"
-        ],
-        "title": "AddAccount"
-      },
-      "Analysis": {
-        "properties": {
-          "eventId": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Eventid"
-          },
-          "severity": {
-            "type": "string",
-            "enum": [
-              "info",
-              "warning"
-            ],
-            "title": "Severity"
-          },
-          "summary": {
-            "type": "string",
-            "title": "Summary"
-          },
-          "evidence": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Evidence"
-          },
-          "recommendation": {
-            "type": "string",
-            "title": "Recommendation"
-          },
-          "mode": {
-            "type": "string",
-            "const": "deterministic-mock",
-            "title": "Mode",
-            "default": "deterministic-mock"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "eventId",
-          "severity",
-          "summary",
-          "evidence",
-          "recommendation"
-        ],
-        "title": "Analysis"
-      },
-      "AnalyzeRequest": {
-        "properties": {
-          "eventId": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Eventid"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "eventId"
-        ],
-        "title": "AnalyzeRequest"
-      },
-      "AppSettings": {
-        "properties": {
-          "autoSync": {
-            "type": "boolean",
-            "title": "Autosync",
-            "default": false
-          },
-          "syncIntervalSeconds": {
-            "type": "integer",
-            "maximum": 86400.0,
-            "minimum": 10.0,
-            "title": "Syncintervalseconds",
-            "default": 300
-          },
-          "startMinimized": {
-            "type": "boolean",
-            "title": "Startminimized",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "AppSettings"
-      },
-      "ConnectorOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "capabilities": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Capabilities"
-          },
-          "permissions": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Permissions"
-          },
-          "lastSyncAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Lastsyncat"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
-          "name",
-          "capabilities",
-          "permissions"
+          "toolCallId",
+          "revision",
+          "action",
+          "source",
+          "reasonCode",
+          "createdAt"
         ],
-        "title": "ConnectorOut"
+        "title": "Decision"
       },
-      "DataOut": {
+      "DecisionWrite": {
         "properties": {
-          "connectionId": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Connectionid"
-          },
-          "providerAccountId": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Provideraccountid"
-          },
-          "balance": {
-            "type": "string",
-            "pattern": "^\\d{1,12}\\.\\d{2}$",
-            "title": "Balance"
-          },
-          "currency": {
+          "action": {
             "type": "string",
             "enum": [
-              "USD",
-              "CNY"
+              "approve",
+              "reject"
             ],
-            "title": "Currency"
+            "title": "Action"
           },
-          "usageUnits": {
-            "type": "integer",
-            "maximum": 1000000000.0,
-            "minimum": 0.0,
-            "title": "Usageunits"
-          },
-          "resourceStatus": {
-            "type": "string",
-            "enum": [
-              "healthy",
-              "degraded"
-            ],
-            "title": "Resourcestatus"
-          },
-          "revision": {
+          "expectedRevision": {
             "type": "integer",
             "minimum": 1.0,
-            "title": "Revision"
-          },
-          "updatedAt": {
-            "type": "string",
-            "title": "Updatedat"
-          },
-          "source": {
-            "type": "string",
-            "const": "mock",
-            "title": "Source",
-            "default": "mock"
+            "title": "Expectedrevision"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "connectionId",
-          "providerAccountId",
-          "balance",
-          "currency",
-          "usageUnits",
-          "resourceStatus",
-          "revision",
-          "updatedAt"
+          "action",
+          "expectedRevision"
         ],
-        "title": "DataOut"
+        "title": "DecisionWrite"
       },
       "ErrorDetail": {
         "properties": {
@@ -3554,246 +3083,6 @@
         ],
         "title": "ErrorResponse"
       },
-      "EventOut": {
-        "properties": {
-          "eventId": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Eventid"
-          },
-          "sequence": {
-            "type": "integer",
-            "title": "Sequence"
-          },
-          "eventType": {
-            "type": "string",
-            "enum": [
-              "account.connected",
-              "account.disconnected",
-              "sync.started",
-              "sync.completed",
-              "sync.failed",
-              "data.changed",
-              "sync.retry_scheduled",
-              "sync.cancelled",
-              "agent.started",
-              "agent.progress",
-              "agent.completed",
-              "agent.failed"
-            ],
-            "title": "Eventtype"
-          },
-          "sourceId": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Sourceid"
-          },
-          "accountId": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Accountid"
-          },
-          "occurredAt": {
-            "type": "string",
-            "title": "Occurredat"
-          },
-          "payload": {
-            "$ref": "#/components/schemas/EventPayload"
-          },
-          "correlationId": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Correlationid"
-          },
-          "analysis": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Analysis"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "eventId",
-          "sequence",
-          "eventType",
-          "sourceId",
-          "accountId",
-          "occurredAt",
-          "payload",
-          "correlationId",
-          "analysis"
-        ],
-        "title": "EventOut"
-      },
-      "EventPage": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/EventOut"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "nextCursor": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Nextcursor"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "items",
-          "nextCursor"
-        ],
-        "title": "EventPage"
-      },
-      "EventPayload": {
-        "properties": {
-          "errorCode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Errorcode"
-          },
-          "attempt": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Attempt"
-          },
-          "nextAttemptAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Nextattemptat"
-          },
-          "changedFields": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "balance",
-                    "currency",
-                    "usageUnits",
-                    "resourceStatus"
-                  ]
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Changedfields"
-          },
-          "previous": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DataOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "current": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DataOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "runId": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 120,
-                "minLength": 1,
-                "pattern": "^[a-zA-Z0-9:_-]+$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Runid"
-          },
-          "stage": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stage"
-          },
-          "progress": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Progress"
-          },
-          "result": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Analysis"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "EventPayload"
-      },
       "Health": {
         "properties": {
           "status": {
@@ -3812,158 +3101,17 @@
         "type": "object",
         "title": "Health"
       },
-      "LegacyAccount": {
+      "HostBashStatus": {
         "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
           },
-          "connectorId": {
-            "type": "string",
-            "title": "Connectorid"
+          "available": {
+            "type": "boolean",
+            "title": "Available"
           },
-          "providerAccountId": {
-            "type": "string",
-            "title": "Provideraccountid"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "balance": {
-            "type": "string",
-            "pattern": "^\\d{1,12}\\.\\d{2}$",
-            "title": "Balance"
-          },
-          "currency": {
-            "type": "string",
-            "enum": [
-              "USD",
-              "CNY"
-            ],
-            "title": "Currency"
-          },
-          "updatedAt": {
-            "type": "string",
-            "title": "Updatedat"
-          },
-          "source": {
-            "type": "string",
-            "const": "mock",
-            "title": "Source"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "connectorId",
-          "providerAccountId",
-          "name",
-          "balance",
-          "currency",
-          "updatedAt",
-          "source"
-        ],
-        "title": "LegacyAccount"
-      },
-      "LegacyEvent": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "connectorId": {
-            "type": "string",
-            "title": "Connectorid"
-          },
-          "accountId": {
-            "type": "string",
-            "title": "Accountid"
-          },
-          "providerEventId": {
-            "type": "string",
-            "title": "Providereventid"
-          },
-          "kind": {
-            "type": "string",
-            "const": "balance.observed",
-            "title": "Kind"
-          },
-          "balance": {
-            "type": "string",
-            "pattern": "^\\d{1,12}\\.\\d{2}$",
-            "title": "Balance"
-          },
-          "currency": {
-            "type": "string",
-            "enum": [
-              "USD",
-              "CNY"
-            ],
-            "title": "Currency"
-          },
-          "occurredAt": {
-            "type": "string",
-            "title": "Occurredat"
-          },
-          "source": {
-            "type": "string",
-            "const": "mock",
-            "title": "Source"
-          },
-          "analysis": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Analysis"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "connectorId",
-          "accountId",
-          "providerEventId",
-          "kind",
-          "balance",
-          "currency",
-          "occurredAt",
-          "source",
-          "analysis"
-        ],
-        "title": "LegacyEvent"
-      },
-      "LegacyTask": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "connectorId": {
-            "type": "string",
-            "title": "Connectorid"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "running",
-              "succeeded",
-              "failed",
-              "interrupted"
-            ],
-            "title": "Status"
-          },
-          "startedAt": {
-            "type": "string",
-            "title": "Startedat"
-          },
-          "finishedAt": {
+          "reasonCode": {
             "anyOf": [
               {
                 "type": "string"
@@ -3972,86 +3120,540 @@
                 "type": "null"
               }
             ],
-            "title": "Finishedat"
+            "title": "Reasoncode"
           },
-          "errorCode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Errorcode"
+          "executionTarget": {
+            "type": "string",
+            "const": "backend-host",
+            "title": "Executiontarget",
+            "default": "backend-host"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "id",
-          "connectorId",
-          "status",
-          "startedAt",
-          "finishedAt",
-          "errorCode"
+          "enabled",
+          "available"
         ],
-        "title": "LegacyTask"
+        "title": "HostBashStatus"
       },
-      "MockConfig": {
+      "JsonValue": {},
+      "MessageAccepted": {
         "properties": {
-          "balance": {
-            "type": "string",
-            "pattern": "^\\d{1,12}\\.\\d{2}$",
-            "title": "Balance",
-            "default": "8.50"
+          "message": {
+            "$ref": "#/components/schemas/UserMessage"
           },
-          "currency": {
+          "run": {
+            "$ref": "#/components/schemas/Run"
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "message",
+          "run",
+          "session"
+        ],
+        "title": "MessageAccepted"
+      },
+      "MessagePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/UserMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/app__agent__contracts__AssistantMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/ToolCallMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/ToolResultMessage"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "kind",
+                "mapping": {
+                  "assistant": "#/components/schemas/app__agent__contracts__AssistantMessage",
+                  "tool_call": "#/components/schemas/ToolCallMessage",
+                  "tool_result": "#/components/schemas/ToolResultMessage",
+                  "user": "#/components/schemas/UserMessage"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "hasMore": {
+            "type": "boolean",
+            "title": "Hasmore"
+          },
+          "nextSequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextsequence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "hasMore",
+          "nextSequence"
+        ],
+        "title": "MessagePage"
+      },
+      "ModelCatalog": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ModelOption"
+            },
+            "type": "array",
+            "maxItems": 32,
+            "title": "Items"
+          },
+          "defaultProfileId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defaultprofileid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ModelCatalog"
+      },
+      "ModelOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "provider": {
             "type": "string",
             "enum": [
-              "USD",
-              "CNY"
+              "openai",
+              "anthropic",
+              "gemini",
+              "deepseek",
+              "qwen",
+              "kimi",
+              "zhipu",
+              "openrouter",
+              "xai"
             ],
-            "title": "Currency",
-            "default": "USD"
+            "title": "Provider"
           },
-          "usageUnits": {
+          "model": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9._:/-]+$",
+            "title": "Model"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "credentialRevision": {
             "type": "integer",
-            "maximum": 1000000000.0,
             "minimum": 0.0,
-            "title": "Usageunits",
-            "default": 100
-          },
-          "resourceStatus": {
-            "type": "string",
-            "enum": [
-              "healthy",
-              "degraded"
-            ],
-            "title": "Resourcestatus",
-            "default": "healthy"
-          },
-          "scenario": {
-            "type": "string",
-            "enum": [
-              "success",
-              "network_once",
-              "rate_limit_once",
-              "server_once",
-              "timeout",
-              "auth",
-              "forbidden",
-              "invalid"
-            ],
-            "title": "Scenario",
-            "default": "success"
+            "title": "Credentialrevision",
+            "default": 0
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "title": "MockConfig"
+        "required": [
+          "id",
+          "label",
+          "provider",
+          "model",
+          "ready"
+        ],
+        "title": "ModelOption"
       },
-      "RunOut": {
+      "ModelProfileCreate": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "anthropic",
+              "gemini",
+              "deepseek",
+              "qwen",
+              "kimi",
+              "zhipu",
+              "openrouter",
+              "xai"
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9._:/-]+$",
+            "title": "Model"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "model"
+        ],
+        "title": "ModelProfileCreate"
+      },
+      "ModelProfileList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ModelProfileOut"
+            },
+            "type": "array",
+            "maxItems": 32,
+            "title": "Items"
+          },
+          "defaultProfileId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defaultprofileid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ModelProfileList"
+      },
+      "ModelProfileOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "anthropic",
+              "gemini",
+              "deepseek",
+              "qwen",
+              "kimi",
+              "zhipu",
+              "openrouter",
+              "xai"
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9._:/-]+$",
+            "title": "Model"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "credentialRevision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Credentialrevision",
+            "default": 0
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "provider",
+          "model",
+          "ready",
+          "enabled"
+        ],
+        "title": "ModelProfileOut"
+      },
+      "NetworkTargetList": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "none",
+              "proxy"
+            ],
+            "title": "Mode"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkTargetStatus"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "items"
+        ],
+        "title": "NetworkTargetList"
+      },
+      "NetworkTargetStatus": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "hostname": {
+            "type": "string",
+            "title": "Hostname"
+          },
+          "capability": {
+            "type": "string",
+            "title": "Capability"
+          },
+          "methods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Methods"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Paths"
+          },
+          "credentialRequired": {
+            "type": "boolean",
+            "title": "Credentialrequired"
+          },
+          "credentialRevision": {
+            "type": "integer",
+            "title": "Credentialrevision"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "hostname",
+          "capability",
+          "methods",
+          "paths",
+          "credentialRequired",
+          "credentialRevision",
+          "ready"
+        ],
+        "title": "NetworkTargetStatus"
+      },
+      "PoolStatus": {
+        "properties": {
+          "capacity": {
+            "type": "integer",
+            "title": "Capacity"
+          },
+          "activeRuns": {
+            "type": "integer",
+            "title": "Activeruns"
+          },
+          "occupiedSlots": {
+            "type": "integer",
+            "title": "Occupiedslots"
+          },
+          "cleanupSlots": {
+            "type": "integer",
+            "title": "Cleanupslots"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "capacity",
+          "activeRuns",
+          "occupiedSlots",
+          "cleanupSlots"
+        ],
+        "title": "PoolStatus"
+      },
+      "ProviderList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderOption"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ProviderList"
+      },
+      "ProviderOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "anthropic",
+              "gemini",
+              "deepseek",
+              "qwen",
+              "kimi",
+              "zhipu",
+              "openrouter",
+              "xai"
+            ],
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "modelHint": {
+            "type": "string",
+            "title": "Modelhint",
+            "default": "填写服务商控制台中的文本模型 ID"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "ProviderOption"
+      },
+      "PublicJWK": {
+        "properties": {
+          "kty": {
+            "type": "string",
+            "const": "RSA",
+            "title": "Kty",
+            "default": "RSA"
+          },
+          "n": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{512}$",
+            "title": "N"
+          },
+          "e": {
+            "type": "string",
+            "const": "AQAB",
+            "title": "E",
+            "default": "AQAB"
+          },
+          "alg": {
+            "type": "string",
+            "const": "RSA-OAEP-256",
+            "title": "Alg",
+            "default": "RSA-OAEP-256"
+          },
+          "ext": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ext",
+            "default": true
+          },
+          "keyOps": {
+            "items": {
+              "type": "string",
+              "const": "wrapKey"
+            },
+            "type": "array",
+            "maxItems": 1,
+            "title": "Keyops"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n"
+        ],
+        "title": "PublicJWK"
+      },
+      "Run": {
         "properties": {
           "id": {
             "type": "string",
@@ -4060,27 +3662,62 @@
             "pattern": "^[a-zA-Z0-9:_-]+$",
             "title": "Id"
           },
-          "eventId": {
+          "sessionId": {
             "type": "string",
             "maxLength": 120,
             "minLength": 1,
             "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Eventid"
+            "title": "Sessionid"
+          },
+          "userMessageId": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Usermessageid"
+          },
+          "previousRunId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9:_-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previousrunid"
           },
           "status": {
             "type": "string",
             "enum": [
               "pending",
               "running",
+              "waiting_review",
               "succeeded",
               "failed",
-              "cancelled"
+              "cancelled",
+              "interrupted"
             ],
             "title": "Status"
           },
-          "progress": {
+          "step": {
+            "type": "string",
+            "title": "Step"
+          },
+          "rounds": {
             "type": "integer",
-            "title": "Progress"
+            "title": "Rounds"
+          },
+          "toolCount": {
+            "type": "integer",
+            "title": "Toolcount"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
           },
           "createdAt": {
             "type": "string",
@@ -4119,63 +3756,65 @@
             ],
             "title": "Errorcode"
           },
-          "result": {
+          "context": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Analysis"
+                "$ref": "#/components/schemas/ContextSummary"
               },
               {
                 "type": "null"
               }
             ]
+          },
+          "toolCalls": {
+            "items": {
+              "$ref": "#/components/schemas/ToolCall"
+            },
+            "type": "array",
+            "title": "Toolcalls"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
-          "eventId",
+          "sessionId",
+          "userMessageId",
+          "previousRunId",
           "status",
-          "progress",
+          "step",
+          "rounds",
+          "toolCount",
+          "revision",
           "createdAt",
           "startedAt",
           "finishedAt",
-          "errorCode",
-          "result"
+          "errorCode"
         ],
-        "title": "RunOut"
+        "title": "Run"
       },
-      "RunPage": {
+      "SecretSubmission": {
         "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/RunOut"
-            },
-            "type": "array",
-            "title": "Items"
+          "challengeId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{32}$",
+            "title": "Challengeid"
           },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "limit": {
-            "type": "integer",
-            "title": "Limit"
-          },
-          "offset": {
-            "type": "integer",
-            "title": "Offset"
+          "envelope": {
+            "type": "string",
+            "maxLength": 16384,
+            "minLength": 100,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Envelope"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "items",
-          "total",
-          "limit",
-          "offset"
+          "challengeId",
+          "envelope"
         ],
-        "title": "RunPage"
+        "title": "SecretSubmission"
       },
       "SecurityOut": {
         "properties": {
@@ -4200,6 +3839,133 @@
           "dataLocation"
         ],
         "title": "SecurityOut"
+      },
+      "Session": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "profileId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "title": "Profileid"
+          },
+          "reviewMode": {
+            "type": "string",
+            "enum": [
+              "full_access",
+              "auto_review",
+              "request_approval",
+              "auto_readonly",
+              "ask",
+              "disabled",
+              "auto_sandbox"
+            ],
+            "title": "Reviewmode"
+          },
+          "bashEnabled": {
+            "type": "boolean",
+            "title": "Bashenabled",
+            "default": false
+          },
+          "executionScope": {
+            "type": "string",
+            "enum": [
+              "sandbox_only",
+              "host_and_sandbox"
+            ],
+            "title": "Executionscope",
+            "default": "sandbox_only"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "createdAt": {
+            "type": "string",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "title": "Updatedat"
+          },
+          "activeRunId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activerunid"
+          },
+          "latestRunId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latestrunid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "profileId",
+          "reviewMode",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "Session"
+      },
+      "SessionCreate": {
+        "properties": {
+          "profileId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "title": "Profileid",
+            "default": "mock"
+          },
+          "reviewMode": {
+            "type": "string",
+            "enum": [
+              "full_access",
+              "auto_review",
+              "request_approval",
+              "auto_readonly",
+              "ask",
+              "disabled",
+              "auto_sandbox"
+            ],
+            "title": "Reviewmode",
+            "default": "full_access"
+          },
+          "bashEnabled": {
+            "type": "boolean",
+            "title": "Bashenabled",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SessionCreate"
       },
       "SessionOut": {
         "properties": {
@@ -4226,86 +3992,61 @@
         ],
         "title": "SessionOut"
       },
-      "Snapshot": {
+      "SessionPage": {
         "properties": {
-          "connectors": {
+          "items": {
             "items": {
-              "$ref": "#/components/schemas/ConnectorOut"
+              "$ref": "#/components/schemas/Session"
             },
             "type": "array",
-            "title": "Connectors"
+            "title": "Items"
           },
-          "accounts": {
-            "items": {
-              "$ref": "#/components/schemas/LegacyAccount"
-            },
-            "type": "array",
-            "title": "Accounts"
-          },
-          "events": {
-            "items": {
-              "$ref": "#/components/schemas/LegacyEvent"
-            },
-            "type": "array",
-            "title": "Events"
-          },
-          "tasks": {
-            "items": {
-              "$ref": "#/components/schemas/LegacyTask"
-            },
-            "type": "array",
-            "title": "Tasks"
-          },
-          "connections": {
-            "items": {
-              "$ref": "#/components/schemas/AccountOut"
-            },
-            "type": "array",
-            "title": "Connections"
-          },
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/DataOut"
-            },
-            "type": "array",
-            "title": "Data"
-          },
-          "jobs": {
-            "items": {
-              "$ref": "#/components/schemas/TaskOut"
-            },
-            "type": "array",
-            "title": "Jobs"
-          },
-          "businessEvents": {
-            "items": {
-              "$ref": "#/components/schemas/EventOut"
-            },
-            "type": "array",
-            "title": "Businessevents"
-          },
-          "settings": {
-            "$ref": "#/components/schemas/AppSettings"
-          },
-          "security": {
-            "$ref": "#/components/schemas/SecurityOut"
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "connectors",
-          "accounts",
-          "events",
-          "tasks",
-          "connections",
-          "data",
-          "jobs",
-          "businessEvents",
-          "settings",
-          "security"
+          "items",
+          "nextCursor"
         ],
-        "title": "Snapshot"
+        "title": "SessionPage"
+      },
+      "SubmissionAck": {
+        "properties": {
+          "resourceId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "title": "Resourceid"
+          },
+          "credentialRevision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Credentialrevision"
+          },
+          "ready": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ready",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "resourceId",
+          "credentialRevision"
+        ],
+        "title": "SubmissionAck"
       },
       "SystemStatus": {
         "properties": {
@@ -4331,7 +4072,38 @@
         ],
         "title": "SystemStatus"
       },
-      "TaskOut": {
+      "TokenUsage": {
+        "properties": {
+          "inputTokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inputtokens"
+          },
+          "outputTokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outputtokens"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TokenUsage"
+      },
+      "ToolCall": {
         "properties": {
           "id": {
             "type": "string",
@@ -4340,73 +4112,202 @@
             "pattern": "^[a-zA-Z0-9:_-]+$",
             "title": "Id"
           },
-          "connectionId": {
+          "runId": {
             "type": "string",
             "maxLength": 120,
             "minLength": 1,
             "pattern": "^[a-zA-Z0-9:_-]+$",
-            "title": "Connectionid"
+            "title": "Runid"
+          },
+          "round": {
+            "type": "integer",
+            "title": "Round"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "arguments": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arguments"
           },
           "status": {
             "type": "string",
             "enum": [
-              "pending",
+              "proposed",
+              "waiting_review",
+              "approved",
               "running",
               "succeeded",
               "failed",
+              "denied",
               "cancelled"
             ],
             "title": "Status"
           },
-          "trigger": {
-            "type": "string",
-            "enum": [
-              "manual",
-              "scheduled"
+          "reviewRevision": {
+            "type": "integer",
+            "title": "Reviewrevision"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Trigger"
+            "title": "Expiresat"
           },
           "attempts": {
             "type": "integer",
             "title": "Attempts"
           },
-          "retryCount": {
-            "type": "integer",
-            "title": "Retrycount"
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/Decision"
+            },
+            "type": "array",
+            "title": "Decisions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "runId",
+          "round",
+          "name",
+          "arguments",
+          "status",
+          "reviewRevision",
+          "expiresAt",
+          "attempts"
+        ],
+        "title": "ToolCall"
+      },
+      "ToolCallMessage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Id"
           },
-          "maxAttempts": {
+          "sessionId": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Sessionid"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9:_-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runid"
+          },
+          "sequence": {
             "type": "integer",
-            "title": "Maxattempts"
+            "title": "Sequence"
           },
           "createdAt": {
             "type": "string",
             "title": "Createdat"
           },
-          "startedAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Startedat"
-          },
-          "finishedAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Finishedat"
-          },
-          "nextAttemptAt": {
+          "kind": {
             "type": "string",
-            "title": "Nextattemptat"
+            "const": "tool_call",
+            "title": "Kind",
+            "default": "tool_call"
+          },
+          "call": {
+            "$ref": "#/components/schemas/ToolCall"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "sessionId",
+          "runId",
+          "sequence",
+          "createdAt",
+          "call"
+        ],
+        "title": "ToolCallMessage"
+      },
+      "ToolList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ToolSpec"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ToolList"
+      },
+      "ToolResult": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Id"
+          },
+          "toolCallId": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Toolcallid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "succeeded",
+              "failed",
+              "denied",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "output": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Output"
           },
           "errorCode": {
             "anyOf": [
@@ -4418,57 +4319,327 @@
               }
             ],
             "title": "Errorcode"
+          },
+          "createdAt": {
+            "type": "string",
+            "title": "Createdat"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
-          "connectionId",
+          "toolCallId",
           "status",
-          "trigger",
-          "attempts",
-          "retryCount",
-          "maxAttempts",
-          "createdAt",
-          "startedAt",
-          "finishedAt",
-          "nextAttemptAt",
-          "errorCode"
+          "output",
+          "errorCode",
+          "createdAt"
         ],
-        "title": "TaskOut"
+        "title": "ToolResult"
       },
-      "TaskPage": {
+      "ToolResultMessage": {
         "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/TaskOut"
-            },
-            "type": "array",
-            "title": "Items"
+          "id": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Id"
           },
-          "total": {
-            "type": "integer",
-            "title": "Total"
+          "sessionId": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Sessionid"
           },
-          "limit": {
-            "type": "integer",
-            "title": "Limit"
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9:_-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runid"
           },
-          "offset": {
+          "sequence": {
             "type": "integer",
-            "title": "Offset"
+            "title": "Sequence"
+          },
+          "createdAt": {
+            "type": "string",
+            "title": "Createdat"
+          },
+          "kind": {
+            "type": "string",
+            "const": "tool_result",
+            "title": "Kind",
+            "default": "tool_result"
+          },
+          "result": {
+            "$ref": "#/components/schemas/ToolResult"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "items",
-          "total",
-          "limit",
-          "offset"
+          "id",
+          "sessionId",
+          "runId",
+          "sequence",
+          "createdAt",
+          "result"
         ],
-        "title": "TaskPage"
+        "title": "ToolResultMessage"
+      },
+      "ToolSpec": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Version",
+            "default": 1
+          },
+          "readOnly": {
+            "type": "boolean",
+            "title": "Readonly",
+            "default": true
+          },
+          "inputSchema": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Inputschema"
+          },
+          "outputSchema": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Outputschema"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "inputSchema",
+          "outputSchema"
+        ],
+        "title": "ToolSpec"
+      },
+      "UserMessage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Id"
+          },
+          "sessionId": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Sessionid"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9:_-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runid"
+          },
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence"
+          },
+          "createdAt": {
+            "type": "string",
+            "title": "Createdat"
+          },
+          "kind": {
+            "type": "string",
+            "const": "user",
+            "title": "Kind",
+            "default": "user"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "sessionId",
+          "runId",
+          "sequence",
+          "createdAt",
+          "content"
+        ],
+        "title": "UserMessage"
+      },
+      "UserMessageWrite": {
+        "properties": {
+          "clientMessageId": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Clientmessageid"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Content"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expectedrevision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "clientMessageId",
+          "content",
+          "expectedRevision"
+        ],
+        "title": "UserMessageWrite"
+      },
+      "app__agent__contracts__AssistantMessage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Id"
+          },
+          "sessionId": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9:_-]+$",
+            "title": "Sessionid"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9:_-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runid"
+          },
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence"
+          },
+          "createdAt": {
+            "type": "string",
+            "title": "Createdat"
+          },
+          "kind": {
+            "type": "string",
+            "const": "assistant",
+            "title": "Kind",
+            "default": "assistant"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 16000,
+            "minLength": 1,
+            "title": "Content"
+          },
+          "final": {
+            "type": "boolean",
+            "title": "Final"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TokenUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "sessionId",
+          "runId",
+          "sequence",
+          "createdAt",
+          "content",
+          "final"
+        ],
+        "title": "AssistantMessage"
+      },
+      "app__llm__contracts__AssistantMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "const": "assistant",
+            "title": "Role",
+            "default": "assistant"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 16000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "AssistantMessage"
       }
     },
     "securitySchemes": {

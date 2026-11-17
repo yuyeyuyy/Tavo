@@ -5,6 +5,7 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PYTHONDONTWRITEBYTECODE=1 PYTHONUNBU
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY app ./app
+COPY sandbox/defaults.toml ./sandbox/defaults.toml
 COPY migrations ./migrations
 COPY alembic.ini ./
 COPY docker-entrypoint.sh /usr/local/bin/tavo-entrypoint

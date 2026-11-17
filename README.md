@@ -1,102 +1,98 @@
 # Tavo
 
-Local-first Personal Agent，现为 **Electron / React 客户端 + 独立 Python / FastAPI 服务端**。目前只有只读 Mock 连接器和确定性 LangGraph 分析，无真实账户、模型请求或 RAG。
+Local-first Personal Agent：Electron / React 客户端 + 独立 Python / FastAPI 服务端。当前核心是**持久对话、受限 Context、真实模型工具循环与可审计审核**。账户/余额/同步功能已移除，旧数据库记录保留历史；不含 RAG、自动长期记忆或多 Agent。
 
-账户、凭据、同步、事件、Agent 与数据库全部由后端管理。桌面退出后，单独运行的后端继续执行任务。现有页面和旧历史记录保留。
+客户端使用左右聊天气泡，支持安全 Markdown 与跟随系统／浅色／深色（默认跟随系统），底部仅保留长条输入和发送／停止。模型与命令权限放在右上角设置。支持会话列表、重启恢复、停止/重试、时间与计算工具记录，以及完全访问权限/帮我审批/请求审批三个命令权限档位（共同控制沙箱与宿主机命令；旧会话保留原策略）。设置中直接选择厂商、填写模型 ID、添加配置，再在密码框输入 Key 加密上传；Key 在服务端加密保存，CLI 隐藏录入仍可用。保存 Key 不调用厂商。
+
+[模型重试指南](docs/MODEL_RETRY_GUIDE.md) · [客户端界面验收](docs/CHAT_APPEARANCE_MARKDOWN_REPORT.md) · [模型与 Key 指南](docs/MODEL_SETUP.md) · [架构](docs/ARCHITECTURE.md) · [API](docs/API.md) · [双执行工具验收](docs/HOST_SANDBOX_TOOLS_REPORT.md) · [学习记录](docs/LEARNING_LOG.md)
+
+新会话默认同时提供沙箱与真实宿主机 Bash，由 Agent 按任务选择；三档权限共同控制两种命令。宿主是 Python 后端当前用户所在机器，无容器隔离。升级到0008后新建对话使用，旧会话不自动扩大权限，见[操作指南](docs/HOST_BASH_GUIDE.md)。
 
 ## 本机启动
 
-环境：Python 3.12、uv、Node.js 24 LTS、pnpm 11。两个终端分别启动：
+需要 Python3.12 / uv / Node.js24 LTS / pnpm11，并先打开 Docker Desktop / Docker Engine。在仓库根目录安装前端依赖：
 
 ```bash
-# 仓库根目录，首次安装
 pnpm install --frozen-lockfile
+```
+
+后端终端：
+
+```bash
 cd backend
 uv sync --frozen --python 3.12
 uv run python -m app.cli init
 uv run python -m app.cli serve
 ```
 
+另一个终端，仓库根目录：
+
 ```bash
-# 另一个终端，仓库根目录
 pnpm dev
 ```
 
-后端默认只监听 `127.0.0.1:8000`，数据位于 `backend/.local/tavo.sqlite`。初始化自动生成私有密钥环与客户端凭据文件，不输出内容。开发端口默认 5173 且不自动换端口；若已被占用，请停止自己的旧开发实例，或显式设置 TAVO_DEV_PORT 并同步配置后端 CORS。开发客户端自动使用该凭据文件，认证材料只留在 Main；Renderer 发 REST 请求并订阅 SSE。
+已有安装升级前停止旧后端/客户端，备份 `backend/.local` 和独立密钥文件，再执行 `pnpm backend:init` 增量升级至 **0007_sandbox_execution_policy**，不要删库。模型配置、Key 和旧表保留；本轮没有自动修改你的正常数据目录。
 
-[API 文档](http://127.0.0.1:8000/docs) 也要求认证。浏览器用户名 `owner`，密码使用本地 `backend/.local/client.token` 文件中的值；请在自己的私有编辑器读取，不上传、不提交、不打印到共享终端。Swagger 静态资源本地托管。
+后端启动前检查 Docker，缺少默认 Bash 镜像会自动构建，再运行并清理预热容器，成功后才监听。Docker 未启动会提示并退出；首次构建可能需要下载基础镜像，默认最多等待300秒。`init` 不依赖 Docker，启动行为见 [启动报告](docs/BASH_STARTUP_REPORT.md)。
 
-已打包客户端可在顶部「配置后端地址」填写地址，再通过原生对话框选择此服务专用的私有凭据文件。切换地址不会自动复用旧凭据。远程地址必须为 HTTPS；完整生产 HTTPS、多用户授权和租户隔离尚未实现。
+终端显示四阶段进度与每5秒等待提示。已有镜像会明确提示复用，预热结束显示沙箱准备完成；随后`Uvicorn running on http://…`表示HTTP监听就绪。预热容器完成后自动删除，实际Bash调用时再创建独立容器；不需要在Docker Desktop中一直看到一个运行中的预热容器。
 
-## 演示
+后端默认回环 `127.0.0.1:8000`，开发界面5173。初始化不打印私密认证文件。桌面 Main 读取 `backend/.local/client.token` 换短会话，Renderer 不接触认证原文。更换开发端口须同时配置后端精确 CORS。
 
-1. 在「账户连接」添加两个 Mock 账户，点击同步。
-2. 修改模拟余额后再次同步；重复相同数据不会产生重复变化事件。
-3. 选择首次网络错误或限流，查看持久化重试与最终结果。失败保留上次成功数据。
-4. 对 `data.changed` 运行模拟分析，在 Agent 页查看 Python LangGraph 的进度和结构化结果。
-5. 启用定时同步，退出整个 Electron，再启动桌面读取历史。后端必须单独保持运行。
-6. 停止后端，桌面显示连接失败及最近缓存；启动后点击「重新连接后端」。
+[认证 API 文档](http://127.0.0.1:8000/docs)：浏览器用户名 `owner`，密码为私有 client.token 文件值；请在私有编辑器读取，不上传、不提交或打印到共享日志。后端与桌面独立，窗口退出后后台仍可执行已入队 Run；后端停止时不会继续运行。
 
-## 命令
+## 体验闭环
+
+1. 保持 Mock，发送“计算 12 / 3”，查看最终结果4和工具记录；“现在的 UTC 时间”使用时钟工具。
+2. 新对话选择“工具逐次确认”，发送“计算 8 * 7”，批准后得到56；拒绝会记录 denied 结果，模型不能声称已执行。
+3. 等待确认时关闭客户端和后端，再重启，恢复原会话并继续审核。停止按钮持久取消，重新生成不重复插入用户消息。
+4. 设置中选厂商、填写控制台支持的模型 ID，添加后输入 Key。设置 → 对话 → 模型中选择该模型，关闭设置并发送消息才调用厂商；工具协议支持取决于实际模型。
+5. 右上角会话列表可切回历史。新对话或切换模型/命令权限创建新会话，不自动取消旧运行；使用停止按钮取消。
+6. 后端不可用时，新建 Mock 对话可使用明确标注的离线演示。离线历史不会自动上传/合并。
+
+九家预设对应四类模型协议，自动化只使用合成 Key、本地 HTTP 和协议替身，不表示九家真实模型/权限均实测。当前非 token 流式；Context 只选本轮窗口，完整历史仍存盘。
+
+## 验证命令
 
 | 命令 | 作用 |
 | --- | --- |
-| `pnpm dev` / `pnpm dev:backend` | 分别启动桌面 / 已初始化的后端 |
-| `pnpm backend:init` | 安装 Python 依赖、执行 Alembic、初始化密钥 |
-| `pnpm api:generate` | Pydantic → OpenAPI → TypeScript 类型 |
-| `pnpm typecheck` | 严格 TypeScript 检查 |
-| `pnpm lint` | ESLint、Ruff 检查与格式检查 |
-| `pnpm test` | 客户端 API/契约测试、Python 测试 |
-| `node scripts/backend-smoke.mjs` | 实际独立进程 REST / SSE / Agent / 重启验证 |
-| `pnpm build` | 构建桌面 Main、Preload、Renderer |
-| `pnpm test:dev` | 开发窗口完整业务烟雾测试 |
-| `pnpm test:e2e` | 真实桌面、浏览器文档、迁移与退出后同步 |
-| `pnpm package:dir` / `pnpm test:packaged` | 本机 ARM64 未签名测试包 / 包内测试 |
-| `pnpm test:docker` | 已构建镜像的隔离 Linux REST/Worker/SSE/Agent 验证 |
-| `docker compose up --build -d` | 无 Electron 的 API + 独立 Worker，端口仅绑定本机 |
+| `pnpm dev` / `pnpm dev:backend` | 桌面 / 已初始化后端 |
+| `pnpm backend:init` | 同步锁定依赖、增量迁移、初始化私有文件 |
+| `pnpm api:generate` | Pydantic → OpenAPI → TS，Zod 另行运行时验证 |
+| `pnpm lint` / `pnpm typecheck` / `pnpm test` | ESLint/Ruff、严格TS、Vitest/Pytest |
+| `node scripts/backend-smoke.mjs` | 独立进程认证、Session、幂等、审核/工具/重启 |
+| `node scripts/model-smoke.mjs` | 合成 Key、本地 HTTP 文本与两轮 Agent 工具协议 |
+| `pnpm build` / `pnpm test:dev` / `pnpm test:e2e` | 构建、真实开发窗口、桌面集成 |
+| `pnpm package:dir` / `pnpm test:packaged` | 本机 ARM64 未签名测试包及包内回归 |
+| `docker compose config --quiet` / `docker compose build` / `pnpm test:docker` | 配置检查 / 镜像构建 / 隔离容器业务验证，三者含义不同 |
 
-E2E 默认使用 Playwright Chromium（`pnpm exec playwright install chromium`）；也可设置 `TAVO_BROWSER_CHANNEL=chrome` 使用已安装的 Chrome。测试使用临时目录和模拟数据。旧 TS 业务实现与原生 SQLite 检查脚本已清理；当前桌面不加载 SQLite 原生模块。
+E2E 可设 `TAVO_BROWSER_CHANNEL=chrome` 使用已安装 Chrome。测试均用隔离临时数据，不调用真实厂商。Docker 正常启动可用 `docker compose up --build -d`，不需要 Electron；见 [后端说明](backend/README.md)。
 
-## 目录与边界
+## 目录和边界
 
 ```text
-apps/desktop/src/main/       窗口、托盘、通知、连接配置、客户端会话
-apps/desktop/src/preload/    6 个原生能力；没有业务 IPC
-apps/desktop/src/renderer/   React、API Client、Query 缓存、SSE
-backend/app/api/             REST Router、Pydantic DTO、认证依赖
-backend/app/services/        Account / Event / Agent / Migration / 应用装配
-backend/app/repositories/    数据访问、事务、原子同步提交
-backend/app/models/          SQLAlchemy ORM
-backend/app/connectors/      Protocol、Registry、Mock
-backend/app/workers/         持久化调度、租约、fencing、重试恢复
-backend/app/agent/           Python StateGraph
-backend/app/core/            配置、错误、HTTP 安全、SecretStore 与客户端认证
-backend/migrations/         Alembic 版本化迁移
-packages/shared/            客户端运行时 Zod 契约与历史兼容类型
-backend/tests/fixtures/legacy/  原样保留的旧 SQL 与哈希，用于迁移兼容测试
+apps/desktop/src/main/       原生能力、连接配置与客户端认证
+apps/desktop/src/preload/    六个受限方法，无业务 IPC
+apps/desktop/src/renderer/   会话 UI、公开 DTO 校验、设置与专用 Key 提交
+backend/app/api/             FastAPI Router / Pydantic
+backend/app/services/        会话、模型/凭据服务与依赖装配
+backend/app/repositories/    SQLite 事务、幂等、分页、审核和结果提交
+backend/app/agent/           Assistant / Context / Tool / Reviewer / LangGraph
+backend/app/llm/             四类模型协议、配置与受限 Key 访问
+backend/app/workers/         持久 Run 队列、租约与 fence
+backend/app/credentials/     通用 JWE 挑战/用途处理/版本CAS
+backend/app/models/          活动 ORM 与只读历史元数据 legacy.py
+backend/migrations/          增量 Alembic，旧迁移不改
+backend/tests/fixtures/legacy/ 原样旧 SQL 与哈希
 ```
 
-旧 Core/Storage/Connector/JS Agent 已从工作区删除，原实现及学习注释可在 Git 基线 `898328d` 查看。清理边界和验证见 [旧代码清理记录](docs/LEGACY_CLEANUP.md)。
+旧账户 API 返回410，旧导入 CLI 退役，不会删除旧数据或执行旧账户队列。原 TS 实现在 Git基线898328d；本轮移除源代码另做不含私有数据的临时备份。历史报告记录旧行为，以当前架构/本轮报告为准。
 
-后端可独立安装运行，无 pnpm、Electron 或 TS 包运行时依赖。桌面业务请求不经过 Main IPC；Main 仅为可信窗口、精确后端来源注入短期客户端会话。
+数据业务字段（含聊天）未整体加密；凭据和模型私有续接使用 Fernet，私有密钥环须单独保护和备份。当前单所有者、本机SQLite，不宣称公网生产/多租户隔离或外部Exactly-once。未签名 `.app` 是测试产物。
 
-## 迁移与安全
+分支为 `feat/agent-foundations`，本次未自动提交、推送或合并。协作约定见 [AGENTS.md](AGENTS.md) 与 [Git工作流](docs/GIT_WORKFLOW.md)。
 
-旧库仍位于 macOS `~/Library/Application Support/Tavo/tavo.sqlite`，不会自动覆盖或删除。显式导入到已初始化且没有账户的后端：
 
-```bash
-cd backend
-uv run python -m app.cli import-legacy --source '/完整路径/旧版/tavo.sqlite'
-```
+AgentPool/独立模型自审查/隔离Bash已加入。Bash和新对话默认启用，客户端没有启用开关。宿主Python后端启动时准备默认镜像和预热容器；Docker不可用会阻止后端启动。原Compose显式关闭Bash，不挂宿主socket。操作、模式、额外模型费用、工作卷备份与限制见 [Bash指南](docs/BASH_TOOL.md)；最新启动验收见 [启动报告](docs/BASH_STARTUP_REPORT.md)。
 
-脚本先使用 SQLite backup API 建立 0600 一致性备份，再在事务中导入并验证数量、关联和关键字段。旧 OS 密文保留归档，账户需要重新连接；未完成旧同步任务取消并记录原状态。详细兼容差异及回滚见 [迁移报告](docs/REFACTOR_REPORT.md)。
-
-后端使用 cryptography Fernet/MultiFernet，数据库只保存第三方凭据密文。密钥环独立于数据库，文件 0600、目录 0700；必须单独保护和备份。密钥轮换命令在 [后端说明](backend/README.md)。数据库业务字段未整体加密，本阶段仍是单所有者模型，不能作为多用户公网服务部署。
-
-同步数据、游标、成功状态和变化事件同事务提交；唯一约束、账户互斥和 Worker 租约降低重复执行风险。保证本地提交幂等，不承诺外部请求 Exactly-once。
-
-阅读：[架构](docs/ARCHITECTURE.md) · [学习与 3 个练习](docs/LEARNING_NOTES.md) · [API](docs/API.md) · [迁移报告与实际验收](docs/REFACTOR_REPORT.md) · [协作规则](AGENTS.md)。
-
-## 分支协作
-
-`main` 保存稳定基线，`dev` 用于集成，当前 Python 重构与旧代码清理位于 `feat/client-server-python`。请查看功能分支获取本轮最新代码；尚未自动合并到 dev/main。详见 [Git 工作流](docs/GIT_WORKFLOW.md)。
+Bash执行策略4沿用长脚本分块、Python基础环境、Run容器复用和版本化Session工作区。新会话默认完全访问；三档仅控制Bash审批，其他工具合法调用自动执行。默认经专用出口访问任意公网HTTPS，POST/PUT/PATCH/DELETE无需独立审批；已保存Token仍只注入绑定目标，额外依赖保持哈希锁定wheel。配置见 [执行指南](docs/BASH_EXECUTION_POLICY_GUIDE.md)，本轮验证见 [权限与网络报告](docs/PERMISSION_NETWORK_REPORT.md)。

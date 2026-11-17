@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { APIClient, parseSSE } from '../apps/desktop/src/renderer/api/client';
+import { APIClient } from '../apps/desktop/src/renderer/api/client';
 import { BackendConnection, backendOrigin } from '../apps/desktop/src/main/backend';
 import { mkdtemp, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -24,21 +24,6 @@ describe('independent API client', () => {
     await expect(api.request('/health')).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
     const offline = new APIClient(native, vi.fn<typeof fetch>().mockRejectedValue(new Error('private-path')));
     await expect(offline.request('/health')).rejects.toMatchObject({ code: 'BACKEND_UNAVAILABLE' });
-  });
-  it('validates durable SSE frames and rejects malformed data', () => {
-    expect(parseSSE(': heartbeat')).toBeNull();
-    expect(() => parseSSE('event: business\ndata: {"sequence":1}')).toThrow();
-    const frame = { eventId: 'event-1', sequence: 1, eventType: 'sync.started', sourceId: 'mock', accountId: 'account-1', occurredAt: '2026-11-13T00:00:00.000Z', payload: { attempt: 1 }, correlationId: 'task-1', analysis: null };
-    expect(parseSSE(`id: 1\nevent: business\ndata: ${JSON.stringify(frame)}`)).toEqual(frame);
-  });
-  it('replays from the last sequence after transport reconnect', async () => {
-    const controller = new AbortController();
-    const event = { eventId: 'event-2', sequence: 2, eventType: 'sync.started', sourceId: 'mock', accountId: 'account-1', occurredAt: '2026-11-13T00:00:00.000Z', payload: { attempt: 1 }, correlationId: 'task-1', analysis: null };
-    const transport = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(`id: 2\nevent: business\ndata: ${JSON.stringify(event)}\n\n`)).mockImplementationOnce(async () => { controller.abort(); return new Response('', { status: 503 }); });
-    const api = new APIClient(native, transport); const events: number[] = [];
-    await api.subscribe(1, controller.signal, (value) => events.push(value.sequence), () => {});
-    expect(events).toEqual([2]); expect(String(transport.mock.calls[1]![0])).toContain('after=2');
-    expect(transport.mock.calls[1]![1]?.headers).toEqual({ 'Last-Event-ID': '2' });
   });
 });
 

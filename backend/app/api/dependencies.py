@@ -27,3 +27,6 @@ def authenticated(
     )
     svc.sessions.require(token)
     return token
+
+
+SessionToken = Annotated[str, Depends(authenticated)]

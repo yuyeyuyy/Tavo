@@ -4,9 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { chromium, expect } from '@playwright/test';
-import { startBackend, freePort } from './backend-harness.mjs';
+import { freePort } from './backend-harness.mjs';
+import { startModelBackend } from './model-harness.mjs';
 const devPort = await freePort();
-const backend = await startBackend({ origins: [`http://127.0.0.1:${devPort}`, `http://localhost:${devPort}`] });
+const model = await startModelBackend({ withKey: false, empty: true, origins: [`http://127.0.0.1:${devPort}`, `http://localhost:${devPort}`] });
+const backend = model.backend;
 
 const directory = mkdtempSync(join(tmpdir(), 'tavo-dev-'));
 const server = createServer();
@@ -28,20 +30,35 @@ try {
   const context = browser.contexts()[0];
   const page = context.pages()[0] ?? await context.waitForEvent('page');
   const errors = []; page.on('pageerror', (error) => errors.push(error.message));
-  await expect(page.getByText('从添加账户开始')).toBeVisible();
-  await page.getByRole('button', { name: '账户连接', exact: true }).click();
-  await page.getByLabel('显示名称', { exact: true }).fill('开发模式账户');
-  await page.getByLabel('模拟账户标识', { exact: true }).fill('dev-demo');
-  await page.getByRole('button', { name: '添加账户', exact: true }).click();
-  await expect(page.getByTestId('connection-card')).toContainText('已连接');
-  await page.getByRole('button', { name: '同步账户', exact: true }).click();
-  await expect.poll(async () => (await backend.request('/snapshot')).data.length).toBe(1);
-  await page.getByRole('button', { name: '总览', exact: true }).click();
-  await page.getByRole('button', { name: '运行模拟分析', exact: true }).click();
-  await expect(page.getByTestId('analysis')).toContainText('模拟账户余额低于演示阈值');
+  await page.waitForURL((url) => ['127.0.0.1', 'localhost'].includes(url.hostname) && url.port === String(devPort), { timeout: 20_000, waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: '今天，想聊点什么？' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('backend-state')).toHaveText('后端已连接');
+  await page.getByRole('textbox', { name: '消息', exact: true }).fill('介绍一下 Tavo');
+  await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await expect(page.getByTestId('assistant-message')).toContainText('你好，我是 Tavo');
+  await page.getByRole('button', { name: '打开设置', exact: true }).click();
+  await expect(page.getByLabel('后端地址', { exact: true })).toHaveValue(backend.origin);
+  await page.getByLabel('模型厂商', { exact: true }).selectOption('deepseek');
+  await page.getByLabel('模型 ID', { exact: true }).fill('fixture-text');
+  await page.getByRole('button', { name: '添加模型配置', exact: true }).click();
+  await expect(page.getByLabel('模型 API Key', { exact: true })).toBeVisible();
+  const profileId = await page.getByLabel('选择凭据目标', { exact: true }).inputValue();
+  await page.getByLabel('模型 API Key', { exact: true }).fill('synthetic-model-test-key');
+  await page.getByRole('button', { name: '加密保存 Key', exact: true }).click();
+  await expect(page.getByRole('region', { name: '模型 Key 设置' })).toContainText('凭据已加密保存到服务端');
+  await expect(page.getByLabel('模型 API Key', { exact: true })).toHaveValue('');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '打开设置', exact: true }).click();
+  await page.getByRole('combobox', { name: '选择模型（切换会开始新对话）' }).selectOption(profileId);
+  await page.keyboard.press('Escape');
+  await page.getByRole('textbox', { name: '消息', exact: true }).fill('测试模型');
+  await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await expect(page.getByTestId('assistant-message')).toContainText('本地 HTTP 替身回复');
+  await page.getByRole('button', { name: '新对话', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '今天，想聊点什么？' })).toBeVisible();
   expect(errors).toEqual([]);
-  await page.screenshot({ path: 'test-results/tavo-dev.png', fullPage: true });
-  console.log('pnpm dev：窗口、账户连接、独立后端 HTTP 同步、Python LangGraph 分析通过。');
+  await page.screenshot({ path: 'test-results/chat-dev.png' });
+  console.log('pnpm dev：空配置添加模型、Web Crypto 凭据提交/清空、服务端模型 HTTP、新对话和原生设置通过。');
 } finally {
   // CDP 没有 Electron app.quit 语义；只清理本脚本独立创建的测试进程组。
   for (const signal of ['SIGTERM', 'SIGKILL']) {
@@ -53,6 +70,6 @@ try {
   }
   await browser?.close();
   child.stdout.destroy(); child.stderr.destroy();
-  await backend.cleanup();
+  await model.cleanup();
   rmSync(directory, { recursive: true, force: true });
 }

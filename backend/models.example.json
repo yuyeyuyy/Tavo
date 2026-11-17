@@ -1,0 +1,77 @@
+{
+  "defaultProfileId": null,
+  "profiles": [
+    {
+      "id": "openai-local",
+      "provider": "openai",
+      "model": "SET_MODEL_ID",
+      "label": "OpenAI",
+      "enabled": false,
+      "maxOutputTokens": 2048
+    },
+    {
+      "id": "anthropic-local",
+      "provider": "anthropic",
+      "model": "SET_MODEL_ID",
+      "label": "Claude",
+      "enabled": false,
+      "maxOutputTokens": 2048
+    },
+    {
+      "id": "gemini-local",
+      "provider": "gemini",
+      "model": "SET_MODEL_ID",
+      "label": "Gemini",
+      "enabled": false,
+      "maxOutputTokens": 2048
+    },
+    {
+      "id": "deepseek-local",
+      "provider": "deepseek",
+      "model": "SET_MODEL_ID",
+      "label": "DeepSeek",
+      "enabled": false,
+      "maxOutputTokens": 2048
+    },
+    {
+      "id": "qwen-local",
+      "provider": "qwen",
+      "model": "SET_MODEL_ID",
+      "label": "通义千问",
+      "enabled": false,
+      "maxOutputTokens": 2048
+    },
+    {
+      "id": "kimi-local",
+      "provider": "kimi",
+      "model": "SET_MODEL_ID",
+      "label": "Kimi",
+      "enabled": false,
+      "maxOutputTokens": 2048
+    },
+    {
+      "id": "zhipu-local",
+      "provider": "zhipu",
+      "model": "SET_MODEL_ID",
+      "label": "智谱 GLM",
+      "enabled": false,
+      "maxOutputTokens": 2048
+    },
+    {
+      "id": "openrouter-local",
+      "provider": "openrouter",
+      "model": "SET_MODEL_ID",
+      "label": "OpenRouter",
+      "enabled": false,
+      "maxOutputTokens": 2048
+    },
+    {
+      "id": "xai-local",
+      "provider": "xai",
+      "model": "SET_MODEL_ID",
+      "label": "Grok",
+      "enabled": false,
+      "maxOutputTokens": 2048
+    }
+  ]
+}

@@ -1,9 +1,10 @@
 // Electron 仅管理窗口、原生能力、连接配置与客户端会话。旧实现与学习注释可在 Git 基线 898328d 查看。
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, protocol, session, Tray } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, protocol, session, shell, Tray } from 'electron';
 import { readFile } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import { BackendConnection, backendOrigin } from './backend';
+import { externalUrlFromApp } from '../shared/links';
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'tavo', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 app.setName('Tavo');
@@ -20,10 +21,15 @@ function csp() {
   return `default-src 'self'; script-src 'self'${development ? " 'unsafe-inline'" : ''}; style-src 'self'${development ? " 'unsafe-inline'" : ''}; img-src 'self' data:; connect-src 'self' ${backend.profile().backendUrl}${development ? ' ws://localhost:* ws://127.0.0.1:*' : ''}; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'`;
 }
 function createWindow() {
-  window = new BrowserWindow({ width: 1180, height: 820, minWidth: 880, minHeight: 650, title: 'Tavo', backgroundColor: '#f7f7f7', show: !backend.profile().startMinimized,
+  window = new BrowserWindow({ width: 1180, height: 820, minWidth: 620, minHeight: 540, title: 'Tavo', backgroundColor: '#111214', titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 20, y: 25 }, show: !backend.profile().startMinimized,
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
   });
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.setWindowOpenHandler(details => {
+    if (details.postBody) return { action: 'deny' };
+    const url = externalUrlFromApp(window?.webContents.getURL() ?? '', trustedURL, details.url);
+    if (url) void shell.openExternal(url).catch(() => { dialog.showErrorBox('无法打开链接', '请复制链接后在浏览器中打开。'); });
+    return { action: 'deny' };
+  });
   window.webContents.on('will-navigate', (event) => event.preventDefault());
   window.webContents.on('will-attach-webview', (event) => event.preventDefault());
   window.on('closed', () => { window = undefined; });

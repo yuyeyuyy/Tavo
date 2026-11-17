@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
@@ -10,31 +11,50 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
 
+from app.api.chat import router as chat_router
+from app.api.credentials import router as credentials_router
 from app.api.dependencies import ServicesDep, authenticated
+from app.api.model_profiles import router as model_profiles_router
 from app.api.routes import auth_router, router
+from app.api.sessions import router as sessions_router
 from app.core.config import Settings
 from app.core.errors import MESSAGES, AppError, Code, status_code
 from app.core.http_security import SecurityMiddleware
+from app.core.startup import report_startup
 from app.services.application import Services
 from app.workers.scheduler import Scheduler
 
 
+# 创建app实例
 def create_app(settings: Settings | None = None, services_factory=Services):
+    # 获取配置，如果没有提供，则从环境变量中加载
     config = settings or Settings.from_env()
+    """
+    创建应用生命周期
+    """
 
     @asynccontextmanager
     async def lifespan(app):
         svc = services_factory(config)
-        await svc.initialize()
-        worker = Scheduler(svc)
-        app.state.services, app.state.worker = svc, worker
-        if config.worker_enabled:
-            worker.start()
+        worker = None
         try:
+            await svc.initialize()
+            worker = Scheduler(svc)
+            app.state.services, app.state.worker = svc, worker
+            if config.worker_enabled:
+                worker.start()
+            report_startup("后端初始化完成，正在启动 HTTP 监听。")
             yield
+        except AppError as error:
+            if worker is None:
+                logging.getLogger("uvicorn.error").error("后端启动已停止：%s", MESSAGES[error.code])
+            raise
         finally:
-            await worker.close()
-            await svc.close()
+            try:
+                if worker is not None:
+                    await worker.close()
+            finally:
+                await svc.close()
 
     app = FastAPI(
         title="Tavo API",
@@ -49,7 +69,7 @@ def create_app(settings: Settings | None = None, services_factory=Services):
         CORSMiddleware,
         allow_origins=list(config.origins),
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Last-Event-ID"],
     )
 
@@ -92,6 +112,10 @@ def create_app(settings: Settings | None = None, services_factory=Services):
 
     app.include_router(auth_router)
     app.include_router(router)
+    app.include_router(chat_router)
+    app.include_router(credentials_router)
+    app.include_router(model_profiles_router)
+    app.include_router(sessions_router)
     basic = HTTPBasic(auto_error=False)
 
     @app.get("/docs", include_in_schema=False)

@@ -1,47 +1,34 @@
-from decimal import Decimal
-from typing import Literal, TypedDict
+from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from app.api.schemas import Analysis, AnalysisInput
 
-
+# 定义 Agent 状态；持久状态由 Repository 管理，图仅编排受控步骤。
 class AgentState(TypedDict):
-    event: dict
-    severity: Literal["info", "warning"]
-    analysis: dict
+    step: str
+    done: bool
 
 
-def classify(state: AgentState):
-    event = AnalysisInput.model_validate(state["event"])
-    threshold = Decimal("10.00") if event.currency == "USD" else Decimal("50.00")
-    return {"severity": "warning" if Decimal(event.balance) < threshold else "info"}
-
-
-def explain(state: AgentState):
-    event = AnalysisInput.model_validate(state["event"])
-    threshold = "10.00 USD" if event.currency == "USD" else "50.00 CNY"
-    result = Analysis(
-        event_id=event.id,
-        severity=state["severity"],
-        summary="模拟账户余额低于演示阈值。"
-        if state["severity"] == "warning"
-        else "模拟账户余额处于演示阈值之上。",
-        evidence=[
-            f"来源事件：{event.id}",
-            f"模拟余额：{event.balance} {event.currency}",
-            f"演示阈值：{threshold}",
-        ],
-        recommendation="仅用于验证本地工作流；请在接入真实平台后核对数据与提醒规则。",
-    )
-    return {"analysis": result.model_dump(by_alias=True)}
-
-
-def create_graph(checkpointer=None):
+def create_graph(assistant, scope):
     graph = StateGraph(AgentState)
-    graph.add_node("classify", classify)
-    graph.add_node("explain", explain)
-    graph.add_edge(START, "classify")
-    graph.add_edge("classify", "explain")
-    graph.add_edge("explain", END)
-    return graph.compile(checkpointer=checkpointer)
+
+    async def model(_state):
+        return await assistant.model(scope)
+
+    async def review(_state):
+        return await assistant.review(scope)
+
+    async def tools(_state):
+        return await assistant.tools(scope)
+
+    graph.add_node("model", model)
+    graph.add_node("review", review)
+    graph.add_node("tools", tools)
+
+    def route(state):
+        return END if state.get("done") else state["step"]
+
+    graph.add_conditional_edges(START, route)
+    for node in ("model", "review", "tools"):
+        graph.add_conditional_edges(node, route)
+    return graph.compile()

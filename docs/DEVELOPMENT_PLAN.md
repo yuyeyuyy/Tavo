@@ -1,6 +1,36 @@
 # Tavo V1 开发方案（Codex 边开发边学习版）
 
+> 2026-11-17 已确认并实施 MODEL_RETRY_OUTPUT_PLAN.md：模型初次＋最多3次重试、DeepSeek有界增额与安全链路诊断，不重放工具、保留总超时/取消；head0008不变，见MODEL_RETRY_OUTPUT_REPORT.md。
+
+> 2026-11-17 客户端外观方案已确认实施：默认跟随系统、浅/深色、左右气泡与安全Markdown；模型/命令权限移入设置，输入条仅保留发送/停止。后端与head0008不变，见CHAT_APPEARANCE_MARKDOWN_REPORT.md。
+
+> 2026-11-17 当前：用户已确认并实施HOST_SANDBOX_TOOLS_PLAN.md，新会话策略5默认沙箱+真实宿主Bash、共享三档审核，旧会话仅沙箱；head0008_host_bash，旧七项迁移不变。当前指南HOST_BASH_GUIDE.md，验收HOST_SANDBOX_TOOLS_REPORT.md；以下较早阶段均为历史。
+
+> 2026-11-17 当前补充：新会话策略4默认全访问与受控公网HTTPS；Fake-IP排障后，Tavo默认解析使用已有Cloudflare DoH，系统DNS可由管理员显式选择。head仍0007，见ARCHITECTURE.md、PERMISSION_NETWORK_REPORT.md及DNS_DEFAULT_REPORT.md；下文禁网/系统DNS为历史。
+
+> 2026-11-17 当前：用户确认并实施BASH_EXECUTION_POLICY_PLAN.md，统一资源/分级审核、Run复用SandboxManager、Session版本化文件、受控UDS出口与专用API凭据、Python开发环境。head0007，0001–0006不变；默认网络关闭。见BASH_EXECUTION_POLICY_GUIDE.md及BASH_EXECUTION_POLICY_REPORT.md。
+
+> 同日启动反馈修复：已有镜像复用、构建等待、预热与清理均显示阶段进度，沙箱完成/应用初始化/实际HTTP监听分别提示。执行和隔离方案不变，见BASH_STARTUP_PROGRESS_REPORT.md。
+
+> 2026-11-16 最新确认并实施：BASH_STARTUP_PLAN.md。宿主Python后端默认在启动前准备Docker镜像和短命预热容器，Docker不可达提示并退出；覆盖之前环境缺失仍可启动聊天的规则。无新迁移，Compose显式关闭Bash。结果见BASH_STARTUP_REPORT.md。
+
+> 同日最新调整：用户明确要求Bash默认启用、移除客户端启用开关；新会话默认true，纯文本除外，既有审核/隔离与历史权限保留，无新迁移。见BASH_DEFAULT_REPORT.md。
+
+> 2026-11-16 最新确认并实施：AGENT_POOL_BASH_PLAN.md，有界AgentPool、独立模型自审查和Docker隔离Bash，head0006；不扩展宿主命令、多角色Agent或任意网络。实际范围/结果见AGENT_POOL_BASH_REPORT.md。
+
+> 2026-11-16 最新授权：完整实施 SESSION_AGENT_REFACTOR_PLAN.md；移除账户/余额运行功能并保留旧数据，建设持久 Session/类型化消息/Context/真实模型工具循环/规则与人工审核。以下账户阶段约束是历史规划，当前以 ARCHITECTURE.md / SESSION_AGENT_REFACTOR_REPORT.md 为准。
+
 > 2026-11-13 架构调整：用户已授权 Electron/React 客户端 + 独立 Python/FastAPI 服务端，当前实现以 ARCHITECTURE.md / REFACTOR_PLAN.md 为准。下文 Node Core、Drizzle、safeStorage、LangGraph.js 方案保留为原始规划记录。后端持续运行时桌面退出仍可同步；电脑休眠或后端停止不保证监控。真实连接器与大型 Agent 仍未授权。
+
+> 2026-11-14 用户确认 Agent 首轮最小闭环：结构化账户监控偏好、受限上下文、两个本地只读工具与 Mock 分析记录。设计见 AGENT_INFRA_PLAN.md，实际结果见 AGENT_INFRA_REPORT.md；不据此自动推进真实模型、持久 checkpoint、RAG 或多 Agent。
+
+> 同日用户确认 CHAT_CLIENT_PLAN.md 方案 A：客户端先收敛为类似 Grok 的单页对话与本地 Mock 回复，移除旧业务页面，保留后端实现与数据。尚未接入真实聊天模型或持久会话，结果见 CHAT_CLIENT_REPORT.md。
+
+> 2026-11-16 用户确认 MODEL_PROVIDERS_PLAN.md：九家模型文本适配、Key 在服务端加密、本机测试，客户端可选模型。实现/验收见 MODEL_PROVIDERS_REPORT.md，配置见 MODEL_SETUP.md；未授权据此自动接入聊天工具、流式/持久会话、真实账户或多 Agent。
+
+> 同日用户确认 SECRET_SUBMISSION_PLAN.md：专用客户端密码表单输入 Key、标准信封加密上传、服务端加密保存及可复用用途处理模块。新增 Alembic 0003 内容版本/删除墓碑，CLI 保留；操作/实现见 MODEL_SETUP.md / SECRET_SUBMISSION_REPORT.md。该授权仅扩展手动输入生命周期，不增加凭据读取、任意模型配置或真实账户权限。
+
+> 同日用户确认 CLIENT_MODEL_SETUP_PLAN.md：补齐客户端选择厂商/填写模型/添加配置后录入 Key，使用 SQLite 持久目录和 0004 一次性旧 JSON 导入，之后新增无需重启。不开放任意端点、配置编辑/删除、模型发现或自动付费测试；结果见 CLIENT_MODEL_SETUP_REPORT.md。
 
 > 版本：V1 规划稿｜目标：macOS 桌面端优先，后续 Windows；Local-first；可开源；预留 Headless Runtime 能力。
 >

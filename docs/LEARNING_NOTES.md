@@ -1,3 +1,5 @@
+> 本文的账户阶段例子保留为历史学习资料；当前Session/Message/Context/Tool/Reviewer及练习见 [LEARNING_LOG.md](LEARNING_LOG.md) 的2026-11-16记录。
+
 # 用前后端知识理解这次重构
 
 这是学习路线与练习，不代表已经掌握。旧 Phase 0/1 笔记保存在 `PHASE_0_1_LEARNING_NOTES.md`。先跑通 README，再按下面顺序读代码。
@@ -81,7 +83,7 @@ Alembic 是数据库结构版本管理，像代码的版本演进。`init` 执�
 
 ## 8. SSE：后端向前端推事件
 
-代码：`api/routes.py` 的 stream、`services/events.py`、客户端 `APIClient.subscribe`、`renderer/store.ts`；测试 `tests/test_sse.py` 与根目录 `scripts/backend-smoke.mjs`。
+代码：`api/routes.py` 的 stream、`services/events.py`、客户端 `APIClient.subscribe`；测试 `backend/tests/test_sse.py` 与根目录 `scripts/backend-smoke.mjs`。旧 renderer/store.ts 的订阅 UI 随单页对话重构移除，当前聊天尚未消费业务 SSE。
 
 轮询每次发新请求，简单但有等待和空响应；SSE 保持一个 HTTP 响应，服务端不断写文本帧，适合单向通知。本项目 SSE 帧有 id、event、data，id 使用持久 sequence，不使用毫秒时间排序。心跳注释保持流活跃。
 
@@ -156,3 +158,53 @@ State 是工作流传递的数据结构；Node 是接收 State、返回部分更
 ## 官方资料
 
 阅读项目代码后，可对照 [FastAPI Depends](https://fastapi.tiangolo.com/tutorial/dependencies/) 理解依赖声明；对照 [SQLAlchemy 2.0 Session](https://docs.sqlalchemy.org/en/20/orm/session_basics.html) 学习提交、回滚和会话生命周期；对照 [LangGraph Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api) 理解 State、Node、Edge；密钥环原理参考 [Fernet / MultiFernet](https://cryptography.io/en/latest/fernet/)。这些说明支持框架原理，项目实际业务行为仍以测试为准。
+
+# Agent 基础设施：结合当前实现学习
+
+- **长期记忆像业务表**：`agent_memories` 只保存用户确认的监控偏好。`AgentService.update_preference` 在写事务内比较 expectedRevision；两个客户端编辑同一条记录，旧客户端得到 409。删除不把版本归零，避免旧 revision=0 又能覆盖。
+- **上下文像一次请求 DTO**：`agent/context.py` 将来源事件、选中偏好、工具说明与有界证据组装成 ContextBundle。长期记忆里有的内容不一定适合本次运行；过期/币种不匹配的值被排除，原始事件与新缓存指标的时间含义分开。
+- **工具像受限 Service 方法**：Registry 描述名称/schema，Executor 才执行校验、授权、限时与记录。工具请求不能自己填写 accountId；`RunScope` 来自 Worker 的持久任务，模型/页面不能通过参数换账户。
+- **超时不等于停止线程**：本地读在最多两个线程中执行。asyncio 等待超时后，底层读取可能还在跑，调度名额保留到返回；之后不保存晚到内容。测试 `test_timeout_keeps_bounded_read_slot_and_discards_late_result` 展示这种区别。
+- **结果/审计不等于 checkpoint**：context 与 toolCalls 能解释一次分析采用过什么，却没有持久化 LangGraph 的 thread 执行位置。本轮依然是确定性 Mock 工具调用，不能写成“已实现真实模型自主规划”。
+
+两种做法的取舍：完整聊天/工具响应都保存再全部塞给模型，开发简单却难控制隐私和窗口；当前只保存/选择类型明确的偏好和证据，便于隔离与复现，但不能处理任意自然语言记忆。向量记忆需后续独立设计。
+
+练习：在认证 /docs 或后端测试中，同一 8.50 USD 事件先用 5.00 阈值分析，再把偏好改为 10.00 重跑；观察两个 run 的 memoryRevision、severity 和两个 toolCalls。删除偏好后新 run 应回到默认值，而旧 run 仍保留旧版本解释。再尝试在 /docs 的偏好请求中增加 ownerId，验证 422；不要输入真实凭据。当前对话 Mock 不执行这些业务操作。
+
+# 单页对话客户端：沿用普通前端知识
+
+`chat/Chat.tsx` 是 View，`chat/store.ts` 管理消息状态，`ChatTransport` 是接口，`mock.ts` 是可替换的数据适配器。和普通前端把组件、状态、HTTP Client 分开是同一种做法，只是本轮没有实际聊天 HTTP 请求。
+
+两种状态保存方式：只用窗口内存，重启清空、结构简单；保存到后端则能跨窗口恢复，但需要 conversation/message、身份/权限、流式中断和清理策略。当前选择前者；Zustand 中的 messages 不是后端长期 AgentMemory，也不是 LangGraph checkpoint。
+
+停止请求有两层：AbortSignal 请适配器停止，requestId 校验拒绝已经晚到的回复。类似搜索框先请求 A、后请求 B，A 晚回来不应覆盖 B。单元测试故意使用不理会 abort 的适配器验证这个边界。
+
+练习：读 `tests/chat.test.ts` 的 stop/retry 用例，先画 pending → cancelled → 新 requestId → complete，再解释为什么只设置 busy=false 不够。另用真实窗口试 Shift+Enter、中文组词回车和 Escape 关闭弹窗，记录焦点回到了哪里。
+
+# 多厂商模型：用前后端知识理解
+
+HTTPChatTransport 像普通前端 API Client；ChatRouter/ChatService 接收统一 ChatRequest；四类 Adapter 像把同一个业务 DTO 转成不同第三方系统的协议。客户端没有 apiKey/baseUrl/system 参数，类似支付后端不能让浏览器随意决定用哪一个商户密钥、把它发到哪一个地址。
+
+profiles 是非秘密配置，Key 是 SecretStore 密文，master.keys 是解密根材料，三者生命周期不同。改模型名可以复用该配置的 Key，改厂商/目标地址则必须重新录入；模型目录的 ready 只说明本地 Key 可读取，不证明厂商鉴权/额度成功。
+
+方案比较：厂商 SDK 功能多，但要审查默认重试/日志；本轮薄 HTTP Adapter 容易测试，但只能支持明确的文本协议子集。环境注入无需落盘，而复用加密库更方便本机多厂商持久配置；本轮选后者，不额外建立前端秘密存储。
+
+练习：跟踪一次选择 DeepSeek 的消息经过 `chat/http.ts → api/client.ts → api/chat.py → services/chat.py → llm/adapter.py`。画出认证头在哪一层出现，再说明为什么用户点击重试可能产生两次模型费用，以及为什么不能悄悄自动换服务商。
+
+# 加密凭据提交：从普通表单与乐观锁理解
+
+`ModelKeySettings` 像业务表单的选择器，`SecretInput` 是独立输入组件，`secret-submission.ts` 是带挑战/加密的 API Client；服务端 Router 负责契约，SecretSubmissionService 管认证、挑战和解密，ModelKeyHandler 负责把已授权用途映射到 ModelKeys。复用的是受控流程，调用者不能自己填数据库秘密引用。
+
+两种方案都可行：HTTPS + 服务端 Fernet 实现少，但 TLS 终止后的正文有明文；HTTPS + JWE + Fernet 增加密钥分发/挑战/版本校验，满足本次正文加密要求。公钥像可公开的投递工具，私钥才能打开信封；内容用随机 AES 密钥加密，RSA 只包装该密钥。参考 [Web Crypto](https://www.w3.org/TR/webcrypto-1/) 和 [JWE Compact](https://www.rfc-editor.org/rfc/rfc7516)。这不等于前端脚本被控制后仍能保护正在输入的 Key。
+
+revision 就是常见后端乐观锁：两个窗口都看见 3，A 保存后为 4，B 的旧挑战不能覆盖；删除保留 5，旧的“缺失版本 0”也不能重新写入。挑战还绑定会话和目标，防止同一个有效信封用于别的用途；取得数据库写锁后再检查授权，避免排队期间已经过期却仍提交。
+
+小练习（15–20 分钟，不用真实 Key）：读 `backend/tests/test_secret_submissions.py` 的 CLI 删除/ABA 用例，画出“未创建 0 → 保存 1 → 删除 2 → 重新保存 3”。解释为什么把删除当成删掉版本行会出错；再把一个信封的 tag 改一位，预测首次错误和同挑战第二次错误，运行该测试核对。另画四个位置：输入 DOM、HTTP 密文、服务端短暂明文、数据库密文，标明 HTTPS/传输私钥/Fernet 密钥各保护什么。
+
+# 客户端选择模型：就是一张普通设置表单
+
+`AddModelForm → APIClient.addModelProfile → ModelProfileService → ModelProfileRepository → SQLite` 与你熟悉的管理后台一致：用户在前端选择，后端验证和保存；刷新/重启后从数据库读取。选择权在客户端并不要求把配置和秘密长期留在浏览器。provider/model/label 是普通 DTO，Key 独立走 SecretInput/JWE，不加到同一个 JSON 里。
+
+两种做法：API 原子写 JSON 并热加载，少表结构却要处理文件并发与多进程刷新；数据库目录多一层迁移/导入，但能复用事务。当前采用后者，首次导入与标记同事务，空目录也标记，防止以后启动又用旧文件盖掉客户端选择。
+
+小练习：在隔离测试中创建一个不含 Key 的模型，预测 `/model-profiles` 和 `/chat/models` 的 ready/credentialRevision，再加密保存合成 Key 后观察。解释为什么“添加成功”和“厂商 Key 可用”不是同一个状态；读 `test_import_failure_is_atomic_and_empty_import_does_not_later_override`，说明为什么完成标记不能在配置数据之前单独提交。不要把真实 Key 写进测试。

@@ -2,12 +2,20 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event, Lock
 
+from pydantic import SecretStr
+
 from app.core import security
+from app.llm.config import ModelProfile
+from app.llm.keys import ModelKeys
 
 
 def test_concurrent_rotations_keep_all_keys_and_existing_ciphertext(f, monkeypatch):
-    account = f.add()
-    original = f.services.secrets.for_connector(account["id"], "mock").get_secret_value()
+    profile = ModelProfile(
+        id="rotation-test", provider="deepseek", model="fixture", label="Rotation", enabled=True
+    )
+    keys = ModelKeys(f.services.secrets)
+    original = "synthetic-concurrent-rotation"
+    keys.put(profile, SecretStr(original))
     first_publish, release_first, second_started, second_publish = (Event() for _ in range(4))
     original_write = security.private_write
     counter, mutex = [0], Lock()
@@ -45,4 +53,4 @@ def test_concurrent_rotations_keep_all_keys_and_existing_ciphertext(f, monkeypat
     assert second_publish.is_set()
     ring = json.loads(security.private_read(f.settings.keyring_file))
     assert len(ring["keys"]) == 3
-    assert f.services.secrets.for_connector(account["id"], "mock").get_secret_value() == original
+    assert keys.get(profile).get_secret_value() == original

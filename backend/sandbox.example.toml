@@ -1,0 +1,84 @@
+# Copy to a local administrator-owned file. Do not put tokens here.
+# TAVO_SANDBOX_CONFIG=/absolute/path/sandbox.toml pnpm dev:backend
+# Omitted fields inherit backend/sandbox/defaults.toml. Invalid configuration fails closed.
+command_max_bytes = 32768
+default_timeout_seconds = 60
+max_timeout_seconds = 300
+cpu = 1.0
+max_cpu = 2.0
+memory_mib = 512
+max_memory_mib = 1024
+pids_limit = 128
+max_file_bytes = 67108864
+max_sandboxes = 1
+max_rounds = 12
+max_tool_calls = 24
+max_active_seconds = 1200
+workspace_max_bytes = 536870912
+workspace_max_files = 10000
+retained_versions = 3
+
+[network]
+# New sessions allow public HTTPS through the controlled egress proxy.
+# Use mode="none" to disable it, or allow_public_https=false for aliases only.
+mode = "proxy"
+allow_public_https = true
+require_write_approval = false
+# Default DoH avoids system Fake-IP DNS; only the trusted gateway uses this resolver.
+# Set "system" explicitly to use administrator-managed public DNS records.
+# Both modes reject private, metadata and reserved destination addresses.
+dns_mode = "cloudflare-doh"
+request_seconds = 30
+response_bytes = 2097152
+requests_per_minute = 30
+requests_per_run = 100
+
+# Public read-only documentation/API. Exact hostname, no wildcard.
+[[network.targets]]
+id = "pypi-metadata"
+hostname = "pypi.org"
+paths = ["/pypi/six/1.17.0/json"]
+methods = ["GET", "HEAD"]
+capability = "public_read"
+
+# Optional API test target. Replace with a user-authorized host and narrow path.
+# New sessions execute allowed methods without separate request approval.
+[[network.targets]]
+id = "my-api"
+hostname = "api.example.com"
+paths = ["/v1/test"]
+methods = ["GET", "POST"]
+capability = "api_test"
+credential = true
+auth_header = "Authorization"
+auth_prefix = "Bearer "
+
+# Optional explicit wheel source. Never set a generic extra-index URL.
+[[network.targets]]
+id = "python-wheels"
+hostname = "files.pythonhosted.org"
+paths = ["/packages"]
+methods = ["GET", "HEAD"]
+capability = "package_download"
+
+# Every extra wheel and its transitive dependencies must be individually approved/pinned.
+# Example is the exact public wheel used in the integration test, not an automatic install.
+[[network.packages]]
+name = "six"
+version = "1.17.0"
+url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl"
+sha256 = "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"
+
+[host]
+# Runs on the Python Worker machine as its OS user; no container isolation.
+enabled = true
+default_cwd = "."
+command_max_bytes = 32768
+default_timeout_seconds = 60
+max_timeout_seconds = 300
+capture_bytes = 65536
+public_output_bytes = 2048
+max_processes = 1
+terminate_grace_seconds = 0.5
+heartbeat_seconds = 1.0
+watchdog_seconds = 10.0

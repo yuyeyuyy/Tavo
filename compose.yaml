@@ -7,6 +7,8 @@ x-backend: &backend
     - backend-data:/data
     - backend-keys:/keys
   environment:
+    # This deployment has no Docker CLI/socket; host Python runtime supports Bash.
+    TAVO_BASH_ENABLED: "0"
     TAVO_DATA_DIR: /data
     TAVO_KEYRING_FILE: /keys/master.keys
     TAVO_CLIENT_TOKEN_FILE: /keys/client.token

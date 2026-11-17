@@ -96,3 +96,67 @@ Phase 0 已具备隔离 IPC、独立 Core、Registry、SQLite、Mock 与图执�
 用户授权上传至 yuyeyuyy/Tavo。保持仓库私有，main/dev 使用已验证 Phase 1 基线加私有文件忽略规则，完整 Python 重构与清理成果放到 feat/client-server-python。上传前重新执行 lint/typecheck/客户端 12 项/Python 34 项/build，检查当前文件及 Git 历史的常见密钥格式，不上传 .idea、数据库、密钥、令牌或本机产物。
 
 使用 GitHub noreply 提交身份，不修改全局身份；通过临时回环 GitHub TLS 隧道解决现有 DNS 故障，不修改系统 DNS。具体分支职责见 GIT_WORKFLOW.md，不自动合并或发布 Release。
+
+## 2026-11-14：Agent 记忆、上下文与只读工具首轮
+
+先阅读开发计划、当前架构和 Agent/Worker/API/客户端实现，提出自写循环与复用 LangGraph、结构化表与向量记忆的取舍。将接口、范围和测试写入 AGENT_INFRA_PLAN.md，用户回答“按推荐范围开始实现”后，在 Python 分支基线创建本地 feat/agent-foundations；不自动提交/推送。
+
+实现一种账户监控偏好、CAS/版本墓碑/有效期、首次执行冻结的 ContextBundle、两个本地只读工具、参数与结果范围校验、UTF-8 大小/步骤/时间预算，以及白名单上下文和逻辑步骤记录。复用已有持久队列/租约/fencing，工具超时后仍保留底层读取名额，拒绝晚到写入。补齐排队或读取期间删除账户的终态处理，防止永久 pending 和伪成功。新增 Alembic 0002，0001 与旧 SQL 不动。
+
+客户端增加偏好编辑和 Agent 执行概览；Pydantic/OpenAPI/生成 TS/Zod 同步，Main/Preload 仍为原 6 个原生方法。没有新增依赖、真实模型、凭据上下文或第三方写入。
+
+最终检查通过 lint/typecheck、客户端 15 / Python 62 项、构建、独立后端 smoke、开发窗口、构建及未签名测试包各 3 个桌面场景；Linux 镜像构建和隔离 Compose 实际业务也通过。截图已检查。详细文件范围、实际命令、学习练习与限制见 AGENT_INFRA_REPORT.md / EVALUATION.md；历史记录与 checkpoint 的边界已写入架构和 ADR 0004。
+
+## 2026-11-14：客户端收敛为单页对话
+
+按 AGENTS 先阅读现状、写 CHAT_CLIENT_PLAN.md，解释“先做界面 + Mock”和“同时建设真实聊天后端”两种范围，用户确认方案 A 后实施。先临时备份旧 UI 源码，重写 Renderer、移除旧页面及仪表盘状态，新增可注入 ChatTransport、Zustand 内存消息、Mock 与连接弹窗；Main 仅调整窗口外观/尺寸，不放宽安全边界。上一轮未提交的 Python 基础设施保留，本轮不改数据/迁移，不新增依赖或提交推送。
+
+状态测试重点覆盖取消无效、晚到请求、新对话与重试，不添加只镜像 UI 的测试。真实 E2E 找到弹窗关闭后焦点未返回，已用实际打开入口恢复并复验。开发 smoke 的初始导航就绪/回环地址等待已修正；最终验证命令、计数、截图和限制以 CHAT_CLIENT_REPORT.md 为准。旧后端业务继续通过独立进程/兼容夹具验证，当前客户端仅 Mock 对话，不宣称模型或工具已接入。
+
+## 2026-11-16：多厂商文本聊天
+
+先核对各家官方接口，设计九家 profile/四类协议、服务端 Key 与真实聊天最小链路。用户确认 MODEL_PROVIDERS_PLAN.md 后实施，复用 SecretStore 和锁定 httpx，新增 ModelKeys、薄适配器、ChatService/API、隐藏 CLI 与模板，客户端显式选模型、不自动 fallback。不扩展事件 Agent 工具或持久会话。开发者新加学习注释保留；基线 Ruff 报告的空行/导入问题仅做必要格式整理。
+
+实际通过客户端 27 / Python 107、lint/typecheck/build、独立后端与真实回环 HTTP 模型 smoke、开发窗口、构建及最终未签名测试包各 4 场景。真实 PTY 检查 Key 不回显；模型目录/响应与日志用合成秘密标记断言。离线依赖更新只移动 httpx 到运行组，没有厂商 SDK 或联网下载。真实 Key/厂商没有执行，Docker 未重建，正常数据库和已执行迁移不改，无提交推送。文件/命令/风险见 MODEL_PROVIDERS_REPORT.md，配置教程见 MODEL_SETUP.md。
+
+## 2026-11-16：客户端加密 Key 提交
+
+用户明确改为客户端手动录入，先比较 HTTPS 与额外加密信封并写 SECRET_SUBMISSION_PLAN.md，回答“按推荐方案实现”后编码。专用 SecretInput / Web Crypto 提交器与模型目录包装分离；后端挑战/解密服务与静态用途 handler 分离，沿用既有 SecretStore 和 CLI。新增 0003 版本/删除墓碑，HTTP/CLI 同事务 CAS，保留旧密文和旧迁移。取得写锁后重新验证会话/过期，避免排队期间失效的提交落盘；普通请求和模型请求的超时错误也分别映射。
+
+没有新增依赖、读取已有 Key、任意 URL/secretRef、模型工具或账户连接器。跨语言测试直接用生产 TS Web Crypto 加密并交给生产 Python 解密；全部凭据为合成值。最终文件、命令、计数、开发/打包桌面与迁移证据见 SECRET_SUBMISSION_REPORT.md / EVALUATION.md。工作区原有改动保留，正常用户数据未初始化/迁移，无提交/推送。
+
+## 2026-11-16：客户端自助配置模型
+
+用户在截图中指出空配置没有 Key 输入入口，并明确要求用户在客户端选厂商/模型。先写 CLIENT_MODEL_SETUP_PLAN.md 比较 JSON 热加载和持久目录，确认后新增 0004/Repository/Service/认证 API，原 JSON 首次事务导入保留 ID/目标/预算/Key。Chat/handler/CLI 统一读目录，客户端添加表单/Query 刷新/定位密码框，不再要求编辑服务端文件或每次重启。普通配置请求拒绝秘密/任意 URL。
+
+新增客户端三项与 Python 21 项，旧迁移夹具只 seed 原 schema 再升级；CLI 测试使用持久目录，harness 在初始化前准备旧 JSON。空目录桌面测试在测试专用 Python 入口注入回环预设，生产无该参数，真实加密/数据库/认证/聊天仍走原实现。实际命令、桌面迭代失败及最终结果见 CLIENT_MODEL_SETUP_REPORT.md，不以编译或本地替身宣称真实厂商成功。无依赖增加、正常用户数据写入、提交/推送。
+
+
+## 2026-11-16：Session Agent 核心
+
+按已确认完整方案退出账户/余额运行功能，旧数据/迁移保留；新增0005和持久Session/消息/Run/审核/模型轮次。复用LangGraph、lease/fence、四协议网关、SecretStore/JWE，客户端接入会话恢复、工具记录与人工确认。详细文件、验证、已知限制见 `SESSION_AGENT_REFACTOR_REPORT.md`；未提交或推送。
+
+
+## 2026-11-16：AgentPool、自审查与隔离Bash
+
+用户确认完整方案后实施0006；新增有界池、独立模型复核、显式Bash模式与真实Docker执行，保持账户历史/模型/Key和原会话功能。旧迁移5/5不变，实际验证/文件变化与操作边界见AGENT_POOL_BASH_REPORT.md。未提交或推送。
+
+## 2026-11-16：Bash启动准备
+
+用户确认BASH_STARTUP_PLAN后，在Python后端初始化前检查Docker、自动构建缺失默认镜像、运行并清理短命预热容器；Docker不可达提示并退出。复用执行隔离配置，补齐初始化失败和清理中取消的资源释放，Compose显式关闭Bash。无新迁移或依赖。最终客户端34、普通后端178、显式Docker9通过，构建和独立smoke/Compose实际业务通过。文件与命令见BASH_STARTUP_REPORT.md；未提交或推送。
+
+## 2026-11-16：启动进度反馈
+
+按用户反馈补齐四阶段、每5秒等待和完成提示；明确缓存镜像复用、预热后清理，不强制拉取或保留常驻容器。启动输出立即flush，CLI保留实际监听日志。客户端34、普通后端180、显式Docker11通过，lint/typecheck/build及独立backend/Bash smoke通过。文件与本轮未重复的验证见BASH_STARTUP_PROGRESS_REPORT.md；无迁移/依赖或提交推送。
+
+## 2026-11-17：执行策略3完成
+
+按已确认方案，16日暂停后17日恢复并完成统一资源/分级审核、SandboxManager、长脚本/工作副本版本提交、UDS出口、专用API Token与受控Python依赖。默认禁网，0007增量升级，旧迁移六项不变，无宿主依赖增加或正常数据升级。客户端34、普通后端223、真实Docker21通过；独立smoke/Compose/开发窗口通过，桌面/未签名包内各8/8。新增恢复、配额、取消、精确审批和清理失败禁止提交回归。文件、实际命令、真实与替身边界及部署步骤见BASH_EXECUTION_POLICY_REPORT.md；未提交/推送。
+
+## 2026-11-17：三档命令权限与默认公网
+
+按已确认方案完成策略4。新会话full_access默认，auto_review/request_approval仅控制Bash；受控公网URL及写方法免独立审批，旧策略冻结与凭据隔离保留。共享正文提示和两端Mock不主动介绍内部工具，审计继续显示。修复默认网关下中断清理后重复删除socket卷的生命周期问题。无新依赖、迁移或推送；完整变更和验证见[报告](PERMISSION_NETWORK_REPORT.md)。
+
+## 2026-11-17：双命令执行入口
+
+按已确认方案完成sandbox与host_bash、共享三档、策略5/0008能力升级，旧会话和旧bash继续Docker语义。宿主标准库监督、取消/恢复、名额、最小环境及凭据输出防护接入原Agent循环；前端明确目标并修复取消刷新期的重试可点击问题。临时项目真实宿主、原Docker、桌面与未签名包通过，文件清单/命令/平台与信任边界见[报告](HOST_SANDBOX_TOOLS_REPORT.md)。没有升级正常数据、提交或推送。

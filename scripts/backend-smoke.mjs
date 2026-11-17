@@ -1,47 +1,41 @@
-/* global fetch, AbortController, TextDecoder, Buffer */
+/* global fetch */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { startBackend } from './backend-harness.mjs';
+import { startBackend, pause } from './backend-harness.mjs';
 
 const backend = await startBackend();
-const controllers = [];
-async function nextEvent(after) {
-  const controller = new AbortController(); controllers.push(controller);
-  const response = await fetch(`${backend.origin}/api/v1/events/stream?after=${after}`, { headers: { Authorization: `Bearer ${backend.session()}`, 'Last-Event-ID': String(after) }, signal: controller.signal });
-  assert.equal(response.status, 200); const reader = response.body.getReader(); let buffer = '';
-  const decoder = new TextDecoder();
-  for (;;) {
-    const chunk = await reader.read(); assert.equal(chunk.done, false);
-    buffer += decoder.decode(chunk.value, { stream: true });
-    const match = buffer.match(/id: (\d+)\nevent: business\ndata: ([^\n]+)\n\n/);
-    if (match) { const event = JSON.parse(match[2]); assert.equal(event.sequence, Number(match[1])); controller.abort(); return event; }
+const post = (path, body) => backend.request(path, { method: 'POST', ...(body ? { body: JSON.stringify(body) } : {}) });
+async function waitRun(session, run, status) {
+  for (let i = 0; i < 100; i++) {
+    const value = await backend.request(`/sessions/${session}/runs/${run}`);
+    if (value.status === status) return value;
+    if (['failed', 'interrupted', 'cancelled'].includes(value.status)) throw new Error(`Run ended: ${value.status}`);
+    await pause(100);
   }
+  throw new Error('Session run timeout');
 }
 try {
   assert.equal((await fetch(backend.origin + '/api/v1/health')).status, 401);
-  const account = await backend.request('/accounts', { method: 'POST', body: JSON.stringify({ connectorId: 'mock', externalAccountId: 'standalone', displayName: 'Headless Mock' }) });
-  const connected = await nextEvent(0); assert.equal(connected.eventType, 'account.connected');
-  const job = await backend.request(`/accounts/${account.id}/sync`, { method: 'POST' });
-  let completed;
-  for (let i = 0; i < 60; i++) {
-    completed = await backend.request(`/sync-tasks/${job.id}`);
-    if (completed.status === 'succeeded') break;
-    await new Promise((done) => setTimeout(done, 100));
-  }
-  assert.equal(completed.status, 'succeeded');
-  const later = await nextEvent(connected.sequence); assert(later.sequence > connected.sequence);
-  const before = await backend.request('/snapshot'); const changed = before.businessEvents.find((event) => event.eventType === 'data.changed'); assert(changed);
-  const run = await backend.request('/agent/analyze', { method: 'POST', body: JSON.stringify({ eventId: changed.eventId }) });
-  let result;
-  for (let i = 0; i < 60; i++) {
-    result = await backend.request(`/agent/runs/${run.id}`); if (result.status === 'succeeded') break;
-    await new Promise((done) => setTimeout(done, 100));
-  }
-  assert.equal(result.status, 'succeeded'); assert.equal(result.result.severity, 'warning');
+  assert.equal((await backend.request('/system/status')).mode, 'single-owner');
+  const s = await post('/sessions', { profileId: 'mock', reviewMode: 'ask' });
+  const accepted = await post(`/sessions/${s.id}/messages`, { clientMessageId: 'smoke-1', content: '计算 12 / 3', expectedRevision: s.revision });
+  const replay = await post(`/sessions/${s.id}/messages`, { clientMessageId: 'smoke-1', content: '计算 12 / 3', expectedRevision: s.revision });
+  assert.equal(replay.run.id, accepted.run.id);
+  const waiting = await waitRun(s.id, accepted.run.id, 'waiting_review');
+  assert.equal(waiting.toolCalls[0].decisions[0].action, 'ask');
   await backend.stop(); await backend.start();
-  const restored = await backend.request('/snapshot'); assert.equal(restored.data.length, 1); assert.equal(restored.jobs[0].id, job.id);
-  const replay = await nextEvent(later.sequence); assert(replay.sequence > later.sequence);
-  assert(!JSON.stringify(restored).includes('mock-only:'));
-  assert(!readFileSync(backend.directory + '/tavo.sqlite').includes(Buffer.from('mock-only:')));
-  console.log('Independent backend: auth, REST, durable sync, SSE replay/reconnect, Python Agent and process restart passed.');
-} finally { for (const controller of controllers) controller.abort(); await backend.cleanup(); }
+  const restored = await backend.request(`/sessions/${s.id}/runs/${accepted.run.id}`);
+  assert.equal(restored.status, 'waiting_review');
+  const call = restored.toolCalls[0];
+  await post(`/sessions/${s.id}/tool-calls/${call.id}/decision`, { action: 'approve', expectedRevision: call.reviewRevision });
+  const finished = await waitRun(s.id, accepted.run.id, 'succeeded');
+  assert.equal(finished.toolCalls[0].status, 'succeeded'); assert.equal(finished.rounds, 2);
+  const messages = await backend.request(`/sessions/${s.id}/messages`);
+  assert.deepEqual(messages.items.map((m) => m.kind), ['user', 'tool_call', 'tool_result', 'assistant']);
+  assert.deepEqual(messages.items[2].result.output, { result: '4' });
+  const history = await backend.request('/sessions'); assert.equal(history.items[0].id, s.id);
+  for (const path of ['/accounts', '/snapshot', '/events/stream', '/settings']) {
+    const response = await fetch(backend.origin + '/api/v1' + path, { headers: { Authorization: `Bearer ${backend.session()}` } });
+    assert.equal(response.status, 410); assert.equal((await response.json()).error.code, 'FEATURE_REMOVED');
+  }
+  console.log('Independent backend passed: authentication, durable Session/messages, idempotent enqueue, review across process restart, approved tool loop and retired routes.');
+} finally { await backend.cleanup(); }

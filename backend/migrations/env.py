@@ -1,6 +1,7 @@
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from app.models import legacy  # noqa: F401 -- retain historical tables in migration metadata
 from app.models.entities import Base
 
 config = context.config
