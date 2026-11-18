@@ -8,8 +8,9 @@ from sqlalchemy import select
 from app.agent.bash import bash_result
 from app.agent.bash_policy import classify
 from app.agent.context import ContextBuilder, json_size, turn_binding
-from app.agent.contracts import Context
-from app.agent.graph import create_graph
+from app.agent.contracts import Context, RunScope
+from app.agent.graph import Continue, LoopExit, StepOutcome
+from app.agent.loop import AgentLoop
 from app.agent.mock import MockAssistantModel
 from app.agent.self_review import REVIEW_SYSTEM, ReviewItem, parse_review, review_history
 from app.agent.tools import ToolCallReviewer, ToolContext, ToolRegistry
@@ -49,6 +50,7 @@ class Assistant:
         )
         self.reviewer = ToolCallReviewer(self.registry)
         self.context = ContextBuilder(db, self.registry, secrets, now)
+        self.loop = AgentLoop(db, repository, now)
         self.keys = ModelKeys(secrets)
         self.mock = MockAssistantModel()
         self.tool_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="tavo-tools")
@@ -73,52 +75,16 @@ class Assistant:
     def budget_ms(self, run):
         return self.budget(run, "max_active_seconds", 180) * 1000
 
-    async def run(self, scope):
-        try:
-            with self.db.session() as db:
-                row = require_scope(db, scope, self.now())
-                step = row.step
-            await create_graph(self, scope).ainvoke(
-                {"step": step, "done": False},
-                {"recursion_limit": max(64, self.registry.policy.max_rounds * 4 + 8)},
-            )
-        except BaseException as error:
-            code = (
-                Code.INTERRUPTED
-                if isinstance(error, asyncio.CancelledError)
-                else error.code
-                if isinstance(error, AppError)
-                else Code.INTERNAL
-            )
-            try:
-                with self.db.session(write=True) as db:
-                    run = require_scope(db, scope, self.now())
-                    for turn in db.scalars(
-                        select(AssistantModelTurn).where(
-                            AssistantModelTurn.run_id == run.id,
-                            AssistantModelTurn.status == "inflight",
-                        )
-                    ):
-                        turn.status = "unknown"
-                        turn.finished_at = self.now()
-                    self.repo.finish(
-                        db,
-                        run,
-                        "interrupted"
-                        if code in (Code.INTERRUPTED, Code.TOOL_EXECUTION_UNKNOWN)
-                        else "failed",
-                        code.value,
-                    )
-            except AppError as rejected:
-                if rejected.code not in (Code.LEASE_LOST, Code.CANCELLED, Code.NOT_FOUND):
-                    raise
-            if isinstance(error, asyncio.CancelledError):
-                raise
-        finally:
-            if self.bash and self.bash.manager:
-                await self.bash.manager.finish_run(scope)
+    async def run(self, scope: RunScope) -> LoopExit | None:
+        manager = self.bash.manager if self.bash else None
+        return await self.loop.run(
+            scope,
+            self,
+            recursion_limit=max(64, self.registry.policy.max_rounds * 4 + 8),
+            cleanup=manager.finish_run if manager else None,
+        )
 
-    async def model(self, scope):
+    async def model(self, scope: RunScope) -> StepOutcome:
         profile, context, history, specs = self.context.prepare(scope)
         with self.db.session(write=True) as db:
             run = require_scope(db, scope, self.now())
@@ -199,11 +165,11 @@ class Assistant:
             run.tool_count += len(turn.calls)
             if not turn.calls:
                 self.repo.finish(db, run, "succeeded")
-                return {"step": "model", "done": True}
+                return LoopExit.COMPLETED
             run.step = "review"
-            return {"step": "review", "done": False}
+            return Continue("review")
 
-    async def review(self, scope):
+    async def review(self, scope: RunScope) -> StepOutcome:
         with self.db.session() as db:
             run = require_scope(db, scope, self.now())
             context = Context.model_validate(run.context)
@@ -290,7 +256,7 @@ class Assistant:
             run.revision += 1
             if waiting:
                 run.status = "waiting_review"
-            return {"step": "tools", "done": waiting}
+            return LoopExit.WAITING_REVIEW if waiting else Continue("tools")
 
     async def self_review(self, scope, context, calls):
         with self.db.session() as db:
@@ -391,7 +357,7 @@ class Assistant:
             )
         return decisions
 
-    async def tools(self, scope):
+    async def tools(self, scope: RunScope) -> StepOutcome:
         with self.db.session() as db:
             run = require_scope(db, scope, self.now())
             ids = list(
@@ -427,7 +393,7 @@ class Assistant:
             if managed:
                 waiting = await self.managed_tool(scope, call_id)
                 if waiting:
-                    return {"step": "tools", "done": True}
+                    return LoopExit.WAITING_REVIEW
                 continue
             future = None
             started = time.monotonic()
@@ -525,12 +491,12 @@ class Assistant:
             run = require_scope(db, scope, self.now())
             run.step = "model"
             run.revision += 1
-        return {"step": "model", "done": False}
+        return Continue("model")
 
     async def close(self):
         await asyncio.to_thread(self.tool_pool.shutdown, wait=True)
 
-    async def review_v3(self, scope, context, calls):
+    async def review_v3(self, scope: RunScope, context, calls) -> StepOutcome:
         risks = {
             c.id: classify(
                 c.name, c.arguments, context.review_mode, context.tool_names, self.registry
@@ -640,7 +606,7 @@ class Assistant:
             run.step, run.revision = "tools", run.revision + 1
             if waiting:
                 run.status = "waiting_review"
-        return {"step": "tools", "done": waiting}
+        return LoopExit.WAITING_REVIEW if waiting else Continue("tools")
 
     async def managed_tool(self, scope, call_id):
         started = time.monotonic()

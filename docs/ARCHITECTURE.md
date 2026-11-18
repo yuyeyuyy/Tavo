@@ -151,3 +151,9 @@ Settings.model_retry → Services → ChatService → ModelGateway，文本/Agen
 支持的DeepSeek模型显式保留思考，只有length且无公开正文/完整工具调用时，初始2048可按4096/8192/16384增长。初始profile/SQLite约束、旧Context、Worker未知请求恢复保持；其他厂商不扩大预算。MODEL_OUTPUT_LIMIT和MODEL_EMPTY_RESPONSE区分预算耗尽与空回复，旧拒绝/非法数据语义保持。
 
 白名单model_request日志区分构造/传输/读取/解析/退避及次数/用量，不记录Key、正文、私有思考或会话ID。无新API请求字段、依赖或数据库迁移，生成契约经命令核对字节不变，客户端公共错误Zod同步。决策见[ADR0016](ADR/0016-bounded-model-retries.md)，指南MODEL_RETRY_GUIDE.md，实际结果MODEL_RETRY_OUTPUT_REPORT.md。
+
+## AgentLoop 执行边界（2026-11-18）
+
+Scheduler 领取符合租约的 Run，AgentPool 管理任务与名额，Assistant.run 转交 [AgentLoop](../backend/app/agent/loop.py)。AgentLoop 从 SQLite 的 `step` 进入 LangGraph，统一处理异常、取消和沙箱清理。Assistant 的三个步骤继续用原有事务写入运行状态和结果。
+
+图节点返回 `Continue(next_step)`、`LoopExit.WAITING_REVIEW` 或 `LoopExit.COMPLETED`。正常边只按 `model → review → tools → model` 推进。等待审批退出本次执行，所有决定写入后同一个 Run 重新排队，从数据库中的 `tools` 恢复。恢复继续使用已提交的结果和参数摘要，遇到未知外部执行时沿用中断规则。架构图、接口和取舍见 [AgentLoop 设计](AGENT_LOOP_DESIGN.md)。
