@@ -35,8 +35,6 @@ class Sequence(MockAssistantModel):
             name, args = next(self.calls)
         except StopIteration:
             return await super().turn(profile, history, specs, credential)
-        if name == "bash" and any(s.name == "sandbox" for s in specs):
-            name = "sandbox"
         call = proposal("sequence-" + str(len(self.results)), name, args)
         native = {
             "role": "assistant",
@@ -59,7 +57,7 @@ def test_real_python_generate_repair_and_reuse_same_sandbox(sandbox):
     model = Sequence(
         [
             ("workspace_write", {"path": "task.py", "content": initial}),
-            ("bash", {"command": "python task.py"}),
+            ("sandbox", {"command": "python task.py"}),
             (
                 "workspace_write",
                 {
@@ -68,7 +66,7 @@ def test_real_python_generate_repair_and_reuse_same_sandbox(sandbox):
                     "expectedSha256": hashlib.sha256(initial.encode()).hexdigest(),
                 },
             ),
-            ("bash", {"command": "python task.py"}),
+            ("sandbox", {"command": "python task.py"}),
         ]
     )
     f.services.assistant.mock = model
@@ -90,9 +88,9 @@ def test_real_long_command_and_oversize_error_can_be_fixed(sandbox):
     f, create = sandbox
     model = Sequence(
         [
-            ("bash", {"command": "printf long-ok #" + ("x" * 5000)}),
-            ("bash", {"command": "#" + ("x" * 32768)}),
-            ("bash", {"command": "printf fixed-ok"}),
+            ("sandbox", {"command": "printf long-ok #" + ("x" * 5000)}),
+            ("sandbox", {"command": "#" + ("x" * 32768)}),
+            ("sandbox", {"command": "printf fixed-ok"}),
         ]
     )
     f.services.assistant.mock = model
@@ -209,8 +207,8 @@ def test_expanded_profile_and_downgrade_apply_within_one_run(sandbox):
     command = "python -c \"from pathlib import Path; print(Path('/sys/fs/cgroup/memory.max').read_text().strip())\""
     model = Sequence(
         [
-            ("bash", {"command": command, "resourceProfile": "expanded"}),
-            ("bash", {"command": command, "resourceProfile": "default"}),
+            ("sandbox", {"command": command, "resourceProfile": "expanded"}),
+            ("sandbox", {"command": command, "resourceProfile": "default"}),
         ]
     )
     f.services.assistant.mock = model

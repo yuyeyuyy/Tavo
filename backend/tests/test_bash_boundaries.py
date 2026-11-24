@@ -55,6 +55,8 @@ def test_bash_defaults_on_and_missing_docker_does_not_prevent_text_chat(f):
         "calculate",
         "get_current_time",
         "host_bash",
+        "web_search",
+        "web_fetch",
     }
 
 

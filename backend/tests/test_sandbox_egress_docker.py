@@ -218,14 +218,14 @@ network.Outbound=FixtureOutbound
 
     monkeypatch.setattr(f.services.bash, "cli", fixture_cli)
     code = "python - <<'PY'\nfrom pathlib import Path\nimport tavo_http,os\np=Path('counter');p.write_text(str(int(p.read_text())+1) if p.exists() else '1')\nassert 'API_TOKEN' not in os.environ\ntavo_http.request('fixture-api',method='POST',path='/v1/test',json={'value':42})\nPY"
-    model = Sequence([("bash", {"command": code})])
+    model = Sequence([("sandbox", {"command": code})])
     f.services.assistant.mock = model
     if mode == "full_access":
         code = (
             code.removesuffix("\nPY")
             + "\nfor method in ['PUT','PATCH','DELETE']:\n assert tavo_http.request('fixture-api',method=method,path='/v1/test',json={'value':42}).json()['value']==42\nfor method in ['POST','PUT','PATCH','DELETE']:\n assert tavo_http.request('https://public.example.test/v1/test',method=method,json={'value':42}).status_code==200\nprint(p.read_text())\nPY"
         )
-        model = Sequence([("bash", {"command": code})])
+        model = Sequence([("sandbox", {"command": code})])
         f.services.assistant.mock = model
     s = create(mode)
     accepted = send(f, s, "Test one authorized API operation.")
@@ -250,7 +250,7 @@ network.Outbound=FixtureOutbound
     model.calls = iter(
         [
             (
-                "bash",
+                "sandbox",
                 {
                     "command": f"python -c \"import tavo_http; assert tavo_http.result('{request_id}').json()['value']==42; print(open('counter').read())\""
                 },

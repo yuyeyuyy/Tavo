@@ -31,6 +31,7 @@ SYSTEM = (
 RESPONSE_BYTES = 262144
 
 
+# 解析url
 def request_for(profile, messages, key, *, output_budget=None):
     budget = checked_output_budget(profile, output_budget)
     rows = [m.model_dump() for m in messages]
@@ -82,6 +83,7 @@ def usage(value, input_name, output_name):
     return result if result.input_tokens is not None or result.output_tokens is not None else None
 
 
+# 结构化回复
 def parse_reply(profile, raw):
     """Select final text only; never return reasoning, tool calls or raw upstream objects."""
     text, limited, tokens = [], False, None
@@ -162,6 +164,7 @@ def parse_reply(profile, raw):
 LOGGER = logging.getLogger("uvicorn.error.tavo.model")
 
 
+# 模型网关
 class ModelGateway:
     def __init__(
         self,
@@ -174,6 +177,7 @@ class ModelGateway:
     ):
         self.policy = policy or ModelRetryPolicy()
         self.sleep, self.clock, self.wall_time = sleep, clock, wall_time
+        # 异步客户端
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(60, connect=10),
             follow_redirects=False,
@@ -192,13 +196,20 @@ class ModelGateway:
             "text",
         )
 
+    # 执行一轮模型交互
+    """
+    credential 相当于apikey
+    """
+
     async def turn(self, profile, history, specs, credential, *, system=None):
         from app.llm.turns import parse_turn, turn_request
 
         key = credential.get_secret_value()
 
         def build(budget):
+            # 拼接http请求
             url, headers, _ = request_for(profile, [], key)
+            # 配置，历史对话，specs，系统提示词
             body = turn_request(
                 profile,
                 history,
@@ -208,6 +219,7 @@ class ModelGateway:
             )
             return url, headers, body
 
+        # 进行一次模型call
         return await self._call(
             profile,
             key,
@@ -224,17 +236,26 @@ class ModelGateway:
                 raise AppError(Code.MODEL_RESPONSE_INVALID)
         return data
 
+    #
     async def _attempt(self, profile, key, build, parse, budget, event):
+        # 解析出url, headers, body
         url, headers, body = build(budget)
+        # 修改当前阶段状态，正在发送中
         event["stage"] = "transport"
+        # post请求
         async with self.client.stream("POST", url, headers=headers, json=body) as response:
+            # 获取响应状态
             status = response.status_code
+            # 更新事件状态
             event.update(stage="read", http_status=status)
+            # 处理响应状态。
             if status != 200:
                 quota = False
+                # 如果请求过多或者额度用光
                 if status == 429:
                     # Only inspect bounded structured error codes, never echo provider messages.
                     try:
+                        # 判断是否是额度问题
                         quota = quota_exhausted(strict_loads(await self._read(response, 8192)))
                     except (AppError, ValueError):
                         pass
@@ -258,17 +279,24 @@ class ModelGateway:
                     ),
                     wait_hint=retry_after(response.headers.get("retry-after"), self.wall_time()),
                 )
+            # 返回格式不对
             if "application/json" not in response.headers.get("content-type", "").lower():
                 raise AppError(Code.MODEL_RESPONSE_INVALID)
+            # 结构化解析结构
             raw = strict_loads(await self._read(response))
+            # 防止泄露厂商返回key导致泄露
             if contains_secret(raw, key):
                 raise AppError(Code.MODEL_RESPONSE_INVALID)
+            # 更新状态
             event.update(stage="parse", **response_metadata(raw, profile.protocol))
+            # 针对的deepseek的情况
+            # TODO 不应该放在这里，放在模型适配层比较合适
             if profile.provider == "deepseek" and event.get("finish_reason") in {
                 "insufficient_system_resource",
                 "aborted",
             }:
                 raise AttemptFailure(Code.MODEL_UNAVAILABLE, retryable=True)
+            # 返回解析后的结果。
             return parse(raw)
 
     def _record(self, event, started, **fields):
@@ -276,15 +304,25 @@ class ModelGateway:
         # All fields are constructed here or come from response_metadata's scalar whitelist.
         LOGGER.info("model_request %s", json.dumps(metadata, separators=(",", ":")))
 
+    """
+    配置文件，key，构建http请求，解析模型返回，类型（review/系统提示词/助理）
+    """
+
     async def _call(self, profile, key, build, parse, kind):
+        # 这次模型调用的最后
         deadline = self.clock() + self.policy.timeout_seconds
+        # 上下文窗口
         budget = profile.max_output_tokens
+        # 标签
         call_tag = uuid4().hex[:16]  # Independent of sessions, users and provider IDs.
         event = {}
+        # 开始时间
         started = self.clock()
         try:
+            # 最大重试数
             for attempt in range(1, self.policy.max_retries + 2):
                 started = self.clock()
+                # 记录当前的情况
                 event = {
                     "call": call_tag,
                     "kind": kind,
@@ -294,15 +332,21 @@ class ModelGateway:
                     "output_budget": budget,
                     "stage": "construct",
                 }
+                # 还剩多长时间
                 remaining = deadline - started
+                # 如果到期直接返回错误
+                # TODO 不该直接返回错误，而是整理整理回复用户
                 if remaining <= 0:
                     self._record(
                         event, started, outcome="deadline", error_code=Code.MODEL_TIMEOUT.value
                     )
                     raise AppError(Code.MODEL_TIMEOUT)
                 try:
+                    # 在这个时间内
                     async with asyncio.timeout(remaining):
+                        # 发送消息
                         result = await self._attempt(profile, key, build, parse, budget, event)
+                    # 更新记录，成功返回
                     self._record(event, started, outcome="success")
                     return result
                 except AttemptFailure as error:
@@ -328,6 +372,7 @@ class ModelGateway:
                         if kind == "text" and event["stage"] == "transport"
                         else Code.MODEL_RESPONSE_INVALID
                     )
+                # 重试
                 can_retry = failure.retryable and attempt <= self.policy.max_retries
                 next_budget = budget
                 if failure.code == Code.MODEL_OUTPUT_LIMIT:

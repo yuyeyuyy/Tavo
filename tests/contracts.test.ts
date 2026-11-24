@@ -23,6 +23,10 @@ describe('Session Agent public contracts',()=>{
     const run={id:'run-1',sessionId:'session-1',userMessageId:'message-1',previousRunId:null,status:'pending',step:'model',rounds:0,toolCount:0,revision:1,createdAt:at,startedAt:null,finishedAt:null,errorCode:null,context:null,toolCalls:[]};
     expect(runSchema.safeParse(run).success).toBe(true);
     expect(runSchema.safeParse({...run,context:{policyVersion:'1',fromSequence:1,toSequence:1,droppedTurns:0,contextBytes:1048577,toolNames:[]}}).success).toBe(false);
+    const toolNames = ['get_current_time', 'calculate', 'sandbox', 'host_bash', 'workspace_write', 'http_request', 'web_search', 'web_fetch'];
+    const context = { policyVersion: '5', fromSequence: 1, toSequence: 1, droppedTurns: 0, contextBytes: 2000, toolNames };
+    expect(runSchema.parse({ ...run, context }).context?.toolNames).toEqual(toolNames);
+    expect(runSchema.safeParse({ ...run, context: { ...context, toolNames: Array.from({ length: 33 }, (_, i) => `tool_${i}`) } }).success).toBe(false);
   });
 });
 

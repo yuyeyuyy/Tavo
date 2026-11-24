@@ -40,6 +40,21 @@ Worker 单领导租约/fence，失租拒绝写回。审核等待持久化并释�
 
 `import-legacy` 已退役，会明确 FEATURE_REMOVED；旧表和原始 SQL 仍保留，当前运行不再导入或执行账户任务。
 
+## Agent 工具
+
+内置工具随服务端注册。普通新会话默认提供沙箱 Bash 和宿主 Bash，按会话选择的命令权限模式执行。历史会话、等待审批的操作和管理员的显式停用配置沿用原规则。
+
+`web_fetch` 读取公开 HTTPS 的 HTML、纯文本或 Markdown，返回来源 URL、标题、有限的正文和截断标记。两个 Web 工具均受公网访问规则、调用超时和 Run 工具预算约束。网页返回内容可能含有误导指令，Agent 应把它当作资料引用。
+
+`web_search` 通过 Brave Search API 查询公开来源。先在已初始化的服务端数据目录对应的环境里录入专用 Key，输入时会隐藏，保存后立即生效。
+
+```bash
+cd backend
+uv run python -m app.cli web-search-key
+```
+
+移除 Key 时在同一环境运行 `uv run python -m app.cli web-search-key --delete`。查询词会发送给 Brave，Key 由现有 SecretStore 加密保存，只用于固定的 Brave 搜索端点。 [Brave Search API 文档](https://api-dashboard.search.brave.com/api-reference/web/search/get)
+
 ## 验证和部署
 
 ```bash

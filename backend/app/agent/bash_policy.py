@@ -30,13 +30,13 @@ def classify(name, arguments, mode, allowed, registry):
         if mode in COMMAND_PERMISSION_MODES:
             return Risk("MEDIUM", "allow", "TOOL_CAPABILITY")
         return Risk("HIGH", "ask", Code.APPROVAL_REQUIRED)
-    if mode in COMMAND_PERMISSION_MODES and name not in {"bash", "sandbox", "host_bash"}:
+    if mode in COMMAND_PERMISSION_MODES and name not in {"sandbox", "host_bash"}:
         return Risk(
             "LOW" if registry.definitions[name].spec.read_only else "MEDIUM",
             "allow",
             "TOOL_CAPABILITY",
         )
-    if name not in {"bash", "sandbox", "host_bash", "workspace_write"}:
+    if name not in {"sandbox", "host_bash", "workspace_write"}:
         return Risk("LOW", "allow" if mode != "ask" else "ask", "READ_ONLY_TOOL")
     if name == "workspace_write":
         level = "MEDIUM"

@@ -80,6 +80,7 @@ def retry_after(value, now):
     return max(0, seconds) if math.isfinite(seconds) else None
 
 
+# 防止返回key导致泄露
 def contains_secret(value, key):
     if isinstance(value, str):
         return key in value
@@ -90,10 +91,12 @@ def contains_secret(value, key):
     return False
 
 
+# 判断是否是额度问题
 def quota_exhausted(raw):
     if not isinstance(raw, dict) or not isinstance(raw.get("error"), dict):
         return False
     error = raw["error"]
+    # 这里的额度问题可以提取出来做一个字典存储
     codes = {"insufficient_quota", "quota_exceeded", "billing_hard_limit_reached"}
     return any(
         isinstance(error.get(field), str) and error[field] in codes for field in ("code", "type")

@@ -22,6 +22,7 @@ def finite_float(value):
     return number
 
 
+# 转json
 def strict_loads(value):
     return json.loads(
         value,

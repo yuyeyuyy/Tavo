@@ -12,6 +12,11 @@ from urllib.parse import unquote, urljoin, urlsplit
 
 import httpx
 
+TRANSLATED_IPV6 = (
+    ipaddress.IPv6Network("64:ff9b::/96"),
+    ipaddress.IPv6Network("64:ff9b:1::/48"),
+)
+
 
 class NetworkFailure(Exception):
     def __init__(self, code):
@@ -167,7 +172,11 @@ def public_addresses(hostname, protected=(), resolver=socket.getaddrinfo):
             address = ipaddress.ip_address(value)
             if (
                 not address.is_global
+                or address.is_multicast
                 or getattr(address, "ipv4_mapped", None)
+                or getattr(address, "sixtofour", None)
+                or getattr(address, "teredo", None)
+                or any(address in block for block in TRANSLATED_IPV6)
                 or any(address in block for block in denied)
             ):
                 raise ValueError
@@ -206,7 +215,7 @@ def doh_resolve(hostname, port, **_kwargs):
 
 
 class Outbound:
-    def __init__(self, policy, credentials=None, *, resolver=None, transport=None):
+    def __init__(self, policy, credentials=None, *, resolver=None, transport=None, dns=None):
         self.policy, self.credentials = policy, credentials or {}
         self.resolver = resolver or (
             doh_resolve if policy.get("dns_mode") == "cloudflare-doh" else socket.getaddrinfo
@@ -218,10 +227,12 @@ class Outbound:
         self.lock = threading.Lock()
         self.usage_read = None
         self.usage_write = None
-        self.dns = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+        self.owns_dns = dns is None
+        self.dns = dns or concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
     def close(self):
-        self.dns.shutdown(wait=False, cancel_futures=True)
+        if self.owns_dns:
+            self.dns.shutdown(wait=False, cancel_futures=True)
 
     def rate(self):
         with self.lock:
@@ -240,7 +251,17 @@ class Outbound:
             if self.usage_write:
                 self.usage_write({"count": self.count, "timestamps": self.timestamps})
 
-    def fetch(self, request, *, approved=False, limit=None, destination=None):
+    def fetch(
+        self,
+        request,
+        *,
+        approved=False,
+        limit=None,
+        destination=None,
+        cancelled=None,
+        include_url=False,
+        identity_encoding=False,
+    ):
         if self.policy["mode"] != "proxy":
             raise NetworkFailure("NETWORK_DENIED")
         request = normalize_request(request, self.policy)
@@ -258,6 +279,8 @@ class Outbound:
         bound_secret = secret  # Keep response redaction even after cross-origin auth is dropped.
         origin = target["hostname"]
         for hop in range(self.policy["redirects"] + 1):
+            if cancelled and cancelled():
+                raise NetworkFailure("CANCELLED")
             self.rate()
             try:
                 parsed = urlsplit(url)
@@ -300,12 +323,22 @@ class Outbound:
             if remaining <= 0:
                 raise NetworkFailure("TIMEOUT")
             try:
-                addresses = self.dns.submit(
+                lookup = self.dns.submit(
                     public_addresses, parsed.hostname, self.policy["protected_cidrs"], self.resolver
-                ).result(timeout=remaining)
+                )
+                try:
+                    addresses = lookup.result(timeout=remaining)
+                finally:
+                    lookup.cancel()
+                if cancelled and cancelled():
+                    raise NetworkFailure("CANCELLED")
+                if time.monotonic() >= deadline:
+                    raise NetworkFailure("TIMEOUT")
                 ip = addresses[0]
                 pinned = httpx.URL(url).copy_with(host=ip)
                 outbound_headers = {**headers, "Host": parsed.hostname}
+                if identity_encoding:
+                    outbound_headers["Accept-Encoding"] = "identity"
                 if secret and parsed.hostname == origin:
                     outbound_headers[target["auth_header"]] = target["auth_prefix"] + secret
                 with httpx.Client(
@@ -330,15 +363,29 @@ class Outbound:
                                 decoded_location = unquote(decoded_location)
                             if bound_secret and bound_secret in decoded_location:
                                 raise NetworkFailure("POLICY_DENIED")
-                            url = urljoin(url, location)
-                            if urlsplit(url).hostname != parsed.hostname:
+                            if not location or any(ord(c) < 32 or ord(c) == 127 for c in location):
+                                raise NetworkFailure("NETWORK_DENIED")
+                            try:
+                                url = urljoin(url, location)
+                                redirected_host = urlsplit(url).hostname
+                            except ValueError:
+                                raise NetworkFailure("NETWORK_DENIED") from None
+                            if redirected_host != parsed.hostname:
                                 secret = None
                                 headers = {}  # never forward auth or caller headers across origins
                             continue
+                        if (
+                            identity_encoding
+                            and response.headers.get("content-encoding", "identity").lower()
+                            != "identity"
+                        ):
+                            raise NetworkFailure("INVALID_DATA")
                         size = 0
                         chunks = []
                         fingerprint = hashlib.sha256()
                         for chunk in response.iter_bytes(16384):
+                            if cancelled and cancelled():
+                                raise NetworkFailure("CANCELLED")
                             size += len(chunk)
                             if time.monotonic() > deadline:
                                 raise NetworkFailure("TIMEOUT")
@@ -355,6 +402,7 @@ class Outbound:
                         if bound_secret and bound_secret.encode() in data:
                             raise NetworkFailure("POLICY_DENIED")
                         return {
+                            **({"url": url} if include_url else {}),
                             "status": response.status_code,
                             "headers": {
                                 k: v

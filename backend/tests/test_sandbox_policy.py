@@ -38,11 +38,11 @@ def test_defaults_and_utf8_command_boundary_and_schema():
     registry = ToolRegistry(bash_enabled=True)
     for command in ("x" * 32769, "你" * 10923):
         with pytest.raises(AppError, match=Code.COMMAND_TOO_LONG):
-            registry.validate("bash", {"command": command})
+            registry.validate("sandbox", {"command": command})
     with pytest.raises(ValidationError):
         BashArguments(command="pwd", timeoutSeconds=301)
     assert (
-        proposal("call", "bash", json.dumps({"command": "x" * 16000})).arguments["command"]
+        proposal("call", "sandbox", json.dumps({"command": "x" * 16000})).arguments["command"]
         == "x" * 16000
     )
 
@@ -66,7 +66,7 @@ def test_config_is_strict_and_can_only_lower_or_select_resource_profiles(tmp_pat
 )
 def test_low_local_commands_do_not_depend_on_model_review(command):
     registry = ToolRegistry(bash_enabled=True)
-    risk = classify("bash", {"command": command}, "auto_sandbox", ["bash"], registry)
+    risk = classify("sandbox", {"command": command}, "auto_sandbox", ["sandbox"], registry)
     assert risk.level == "LOW" and risk.action == "allow" and not risk.model_review
 
 
@@ -75,7 +75,7 @@ def test_command_permissions_do_not_grant_host_access_or_apply_to_file_tool(mode
     registry = ToolRegistry(bash_enabled=True)
     allowed = list(registry.definitions)
     for command in ("cat /var/run/docker.sock", "cat /Users/owner/.ssh/id_rsa", "sudo id"):
-        risk = classify("bash", {"command": command}, mode, allowed, registry)
+        risk = classify("sandbox", {"command": command}, mode, allowed, registry)
         assert risk.action == "deny" and not risk.model_review
     write = classify(
         "workspace_write", {"path": "note.py", "content": "print(42)"}, mode, allowed, registry
@@ -99,7 +99,7 @@ def test_command_permissions_do_not_grant_host_access_or_apply_to_file_tool(mode
 )
 def test_general_code_remains_usable_but_not_claimed_statically_safe(command):
     registry = ToolRegistry(bash_enabled=True)
-    risk = classify("bash", {"command": command}, "auto_sandbox", ["bash"], registry)
+    risk = classify("sandbox", {"command": command}, "auto_sandbox", ["sandbox"], registry)
     assert risk.level == "MEDIUM" and risk.action == "allow"
 
 

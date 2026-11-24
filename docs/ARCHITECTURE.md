@@ -157,3 +157,19 @@ Settings.model_retry → Services → ChatService → ModelGateway，文本/Agen
 Scheduler 领取符合租约的 Run，AgentPool 管理任务与名额，Assistant.run 转交 [AgentLoop](../backend/app/agent/loop.py)。AgentLoop 从 SQLite 的 `step` 进入 LangGraph，统一处理异常、取消和沙箱清理。Assistant 的三个步骤继续用原有事务写入运行状态和结果。
 
 图节点返回 `Continue(next_step)`、`LoopExit.WAITING_REVIEW` 或 `LoopExit.COMPLETED`。正常边只按 `model → review → tools → model` 推进。等待审批退出本次执行，所有决定写入后同一个 Run 重新排队，从数据库中的 `tools` 恢复。恢复继续使用已提交的结果和参数摘要，遇到未知外部执行时沿用中断规则。架构图、接口和取舍见 [AgentLoop 设计](AGENT_LOOP_DESIGN.md)。
+
+## 工具注册与执行
+
+| 部件 | 职责 |
+| --- | --- |
+| `agent/tools/definition.py` | 工具说明、类别、输入和结果 DTO、执行方式 |
+| `agent/tools/registry.py` | 注册名称、生成模型目录、校验参数。运行上下文记录当轮允许的工具名 |
+| `agent/tools/reviewer.py` 和 `agent/bash_policy.py` | 按冻结策略和命令权限决定放行、复核或等待批准 |
+| `agent/tools/executor.py` | 派发同步、异步和命令工具，控制等待时间、校验结果并限制输出 |
+| `agent/tools/builtin/` | 时间和计算、沙箱和宿主命令、Web Search 和 Web Fetch |
+
+`builtin` 由服务端装配。`extension` 可通过 `ToolRegistry.register_extension()` 注册应用自身提供的可信只读函数，复用 DTO、审核和执行。一个 Registry 最多注册 32 个名称，客户端按同一上限校验 Run 摘要。同步函数超时后继续占用资源名额，直至线程退出。
+
+Assistant 与现有 Runner 负责持久化审批、租约校验和有副作用的工具恢复。恢复 Run 时，当前目录与该 Run 已冻结的工具名称取交集。Web 工具使用现有的公网 HTTPS 传输，包括 DNS 校验、固定已验证地址和逐次检查重定向。搜索凭据按固定服务端端点授权，网页抓取使用无凭据 GET。
+
+沙箱命令统一注册为 `sandbox`。只允许沙箱的旧会话在新 Run 中使用这个名称，并继续受既有会话权限约束。历史 `bash` 记录仍可查看，未执行的旧调用会被拒绝。

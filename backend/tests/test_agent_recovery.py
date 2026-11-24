@@ -112,11 +112,10 @@ def test_timed_out_tool_keeps_slot_and_late_result_is_discarded(f):
         release.wait(3)
         return definition.execute(args, context)
 
-    registry.definitions["calculate"] = replace(definition, execute=slow)
+    registry = ToolRegistry([replace(definition, execute=slow, timeout_seconds=0.01)])
     f.services.assistant.registry = registry
     f.services.assistant.reviewer.registry = registry
     f.services.assistant.context.registry = registry
-    f.services.assistant.tool_timeout = 0.01
 
     async def exercise():
         await f.worker.tick()
@@ -127,7 +126,7 @@ def test_timed_out_tool_keeps_slot_and_late_result_is_discarded(f):
         result = next(m["result"] for m in page if m["kind"] == "tool_result")
         assert result["status"] == "failed" and result["errorCode"] == "TIMEOUT"
         release.set()
-        await asyncio.gather(*list(f.services.assistant.readers.values()))
+        await asyncio.gather(*list(f.services.assistant.executor.readers.values()))
         await asyncio.sleep(0)
         assert not f.services.assistant.busy_slots()
         assert page == f.client.get(f"/api/v1/sessions/{s['id']}/messages").json()["items"]

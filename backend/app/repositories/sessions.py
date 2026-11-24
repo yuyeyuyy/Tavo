@@ -58,6 +58,7 @@ def require_leader(db, owner, fence, now):
     return lease
 
 
+# 获取这个session
 def require_session(db, identity):
     row = db.get(ConversationSession, identity)
     if row is None:
@@ -65,16 +66,37 @@ def require_session(db, identity):
     return row
 
 
+# 取出run实例并校验归属
 def require_run(db, session_id, run_id):
+    # 获取当前的run内容
     row = db.get(AssistantRun, run_id)
+    # 校验归属
     if row is None or row.session_id != session_id:
         raise AppError(Code.NOT_FOUND)
     return row
 
 
+# 取出且有资格执行
+"""
+为什么要两套？设想：
+Worker A 是 leader，领了 run-1 和 run-2
+Worker A 卡住 → 租约过期
+Worker B 抢占 → 全局 lease.fence: 1→2
+            → 把 run-1 重新标为 running/owner=B/fence=2
+            → run-2 可能已被别的逻辑标记为 failed
+Worker A 突然醒来：
+   处理 run-1 → 第 2 层就拦住（lease.fence 是 2，它手上是 1）
+   处理 run-2 → 第 3 层拦住（run.status 已不是 running）
+只有第 2 层不够（分不清哪个 run 被接管了），只有第 3 层也不够（新领的 run 可能 fence 恰好相同）。所以两层都要。
+"""
+
+
 def require_scope(db, scope, now):
+    # 获取当前run内容，并检查run是不是属于该session
     run = require_run(db, scope.session_id, scope.run_id)
+    # 获取当前run的leaderWorker
     lease = db.get(WorkerLease, 1)
+    # 全局租约，检查当前worker是不是leader
     if (
         not lease
         or lease.owner != scope.owner
@@ -82,6 +104,7 @@ def require_scope(db, scope, now):
         or lease.expires_at <= now
     ):
         raise AppError(Code.LEASE_LOST)
+    # 检查当前的run被谁领走了还是说
     if (
         run.status != "running"
         or run.worker_owner != scope.owner
@@ -537,7 +560,11 @@ class SessionRepository:
                 raise AppError(Code.REVIEW_EXPIRED)
             if call_digest(call.name, call.arguments) != call.argument_digest:
                 raise AppError(Code.INVALID_STATE)
-            if call.name == "bash" and action == "allow":
+            if (
+                call.name == "sandbox"
+                and action == "allow"
+                and (run.context or {}).get("policyVersion") == "3"
+            ):
                 require_session(db, session_id).workspace_unconfirmed = False
             from app.models.entities import SandboxOperation
 

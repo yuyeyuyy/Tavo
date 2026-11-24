@@ -6,6 +6,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY app ./app
 COPY sandbox/defaults.toml ./sandbox/defaults.toml
+COPY sandbox/runtime/tavo_sandbox/network.py ./sandbox/runtime/tavo_sandbox/network.py
 COPY migrations ./migrations
 COPY alembic.ini ./
 COPY docker-entrypoint.sh /usr/local/bin/tavo-entrypoint

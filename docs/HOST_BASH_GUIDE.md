@@ -20,7 +20,7 @@ pnpm dev:backend
 | sandbox（沙箱） | Python脚本、数据处理、临时文件、测试、网页抓取 | 现有非root Docker、会话工作卷和受控HTTPS出口/DoH |
 | host_bash（宿主机 Bash） | 系统状态、进程、日志、Docker管理、真实项目部署 | Python后端当前OS用户与实际文件/网络权限，无容器隔离 |
 
-历史bash标识始终是Docker兼容入口，绝不改为宿主。宿主是Python后端/Worker所在机器：原生Mac后端操作Mac；普通Compose后端只操作所在容器，不能声称能管理Mac。需要真实Mac功能请原生启动后端。宿主实现面向macOS/Linux POSIX，Windows明确不可用；实际平台验证以报告为准。
+Docker 沙箱统一使用 `sandbox`。旧工具名 `bash` 保留在历史记录，尚未执行的旧调用会被拒绝。宿主是 Python 后端或 Worker 所在的环境，原生 Mac 后端操作 Mac，普通 Compose 后端操作自身容器。宿主实现面向 macOS/Linux POSIX，实际平台验证以报告为准。
 
 两个目标共用完全访问/帮我审批/请求审批三档。全访问自动执行，代审对每条命令做独立模型复核，询问档每条命令先确认；沙箱大范围版本提交继续确认具体diff。其他合法工具不增加命令审批。
 

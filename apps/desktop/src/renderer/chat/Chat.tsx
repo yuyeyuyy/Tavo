@@ -153,7 +153,6 @@ export function Chat() {
     catch { /* No message/key storage fallback. */ } }, [backendUrl, server.session]);
     const selected = server.session?.profileId ?? targetProfile;
     const review = server.session?.reviewMode ?? targetReview;
-    const bashEnabled = server.session?.bashEnabled ?? review !== 'disabled';
     const model = catalog.data?.items.find(m => m.id === selected);
     const mode = selected === 'mock' ? 'MOCK' : model?.label ?? selected;
     const messages = offline ? local.messages : displayMessages(server.messages, server.run);
@@ -178,7 +177,7 @@ export function Chat() {
             }
             return;
         }
-        const sent = await serverStore.getState().send(text, { profileId: selected, reviewMode: review, bashEnabled });
+        const sent = await serverStore.getState().send(text, { profileId: selected, reviewMode: review });
         if (sent) {
             setDraft(current => current === text ? '' : current);
             input.current?.focus();

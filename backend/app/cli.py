@@ -10,6 +10,7 @@ from pathlib import Path
 import uvicorn
 from pydantic import SecretStr
 
+from app.agent.tools.builtin.web import SearchKeys
 from app.core.config import Settings
 from app.core.errors import MESSAGES, AppError, Code
 from app.core.security import SecretStore, initialize_keys
@@ -49,7 +50,16 @@ def main():
     )
     parser.add_argument(
         "command",
-        choices=["init", "serve", "worker", "import-legacy", "rotate-keys", "model-key", "api-key"],
+        choices=[
+            "init",
+            "serve",
+            "worker",
+            "import-legacy",
+            "rotate-keys",
+            "model-key",
+            "api-key",
+            "web-search-key",
+        ],
     )
     parser.add_argument("--data-dir", type=Path)
     parser.add_argument("--host", default="127.0.0.1")
@@ -92,26 +102,32 @@ def main():
             finally:
                 database.close()
             print("Backend schema and private key files initialized; no secrets printed.")
-        elif args.command in {"model-key", "api-key"}:
+        elif args.command in {"model-key", "api-key", "web-search-key"}:
             api_key = args.command == "api-key"
-            if not (args.target if api_key else args.profile):
+            search_key = args.command == "web-search-key"
+            if not search_key and not (args.target if api_key else args.profile):
                 parser.error("--target is required" if api_key else "--profile is required")
             database = Database(settings.database)
             try:
                 store = SecretStore(database, settings)
-                models = ModelProfileService(database, store, settings.models_file)
-                models.initialize()
-                if api_key:
-                    from app.agent.api_credentials import ApiKeys
-
-                    keys = ApiKeys(store, settings.sandbox)
-                    profile = keys.target(args.target)
+                if search_key:
+                    keys = SearchKeys(store)
+                    profile = None
                 else:
-                    profile = models.profile(args.profile, enabled=False)
-                    keys = ModelKeys(store)
+                    models = ModelProfileService(database, store, settings.models_file)
+                    models.initialize()
+                    if api_key:
+                        from app.agent.api_credentials import ApiKeys
+
+                        keys = ApiKeys(store, settings.sandbox)
+                        profile = keys.target(args.target)
+                    else:
+                        profile = models.profile(args.profile, enabled=False)
+                        keys = ModelKeys(store)
+                label = "Brave Search" if search_key else "Model"
                 if args.delete:
                     keys.remove(profile)
-                    print("Model key removed; no secrets printed.")
+                    print(f"{label} key removed; no secrets printed.")
                 else:
                     if not sys.stdin.isatty():
                         parser.error(
@@ -120,11 +136,11 @@ def main():
                     with warnings.catch_warnings():
                         warnings.simplefilter("error", getpass.GetPassWarning)
                         try:
-                            key = SecretStr(getpass.getpass("Model API key (hidden): "))
+                            key = SecretStr(getpass.getpass(f"{label} key (hidden): "))
                         except (getpass.GetPassWarning, EOFError):
                             raise AppError(Code.CREDENTIAL_UNAVAILABLE) from None
                     keys.put(profile, key)
-                    print("Model key encrypted and saved; no restart required.")
+                    print(f"{label} key encrypted and saved; no restart required.")
             finally:
                 database.close()
         elif args.command == "serve":

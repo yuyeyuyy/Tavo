@@ -2934,6 +2934,7 @@
               "type": "string"
             },
             "type": "array",
+            "maxItems": 32,
             "title": "Toolnames"
           }
         },

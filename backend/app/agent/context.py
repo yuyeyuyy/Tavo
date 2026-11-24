@@ -4,6 +4,7 @@ from pathlib import Path
 from sqlalchemy import func, select
 
 from app.agent.contracts import COMMAND_PERMISSION_MODES, Context
+from app.agent.tools.builtin.web import WEB_NAMES
 from app.core.errors import AppError, Code
 from app.core.private_state import PrivateStateStore
 from app.llm.config import ModelProfile
@@ -34,16 +35,28 @@ def turn_binding(run, round_number):
     }
 
 
+# 构建上下文
 class ContextBuilder:
     def __init__(self, db, registry, secrets, now, budget=CONTEXT_BYTES):
         self.db, self.registry, self.now, self.budget = db, registry, now, budget
         self.private = PrivateStateStore(secrets)
 
-    def specs(self, mode, bash_enabled=False, execution_scope="sandbox_only"):
+    def specs(self, mode, legacy_bash_enabled=True, execution_scope="sandbox_only"):
         return [
             s
             for s in self.registry.specs(execution_scope)
-            if mode != "disabled" and (s.read_only or s.name == "host_bash" or bash_enabled)
+            if mode != "disabled"
+            and (s.read_only or s.name == "host_bash" or legacy_bash_enabled)
+            and (s.name not in WEB_NAMES or mode in COMMAND_PERMISSION_MODES)
+        ]
+
+    def frozen_specs(self, context):
+        scope = "host_and_sandbox" if context.policy_version == "5" else "sandbox_only"
+        allowed = set(context.tool_names)
+        return [
+            spec
+            for spec in self.specs(context.review_mode, context.bash_enabled, scope)
+            if spec.name in allowed
         ]
 
     def history_in(self, db, run_ids, protocol):
@@ -157,6 +170,7 @@ class ContextBuilder:
                     append_native(history, protocol, generated, [payload])
         return history
 
+    # 用执行凭证验证身份并定位到这一单，组装出本轮需要的数据
     def prepare(self, scope):
         with self.db.session(write=True) as db:
             run = require_scope(db, scope, self.now())
@@ -166,6 +180,12 @@ class ContextBuilder:
             protocol = profile.protocol if profile else "completions"
             user = db.get(ConversationMessage, run.user_message_id)
             if not run.context:
+                specs = self.specs(
+                    session.review_mode, session.bash_enabled, session.execution_scope
+                )
+                names = [spec.name for spec in specs]
+                has_sandbox = "sandbox" in names
+                use_policy = modern or has_sandbox or bool(WEB_NAMES.intersection(names))
                 query = (
                     select(AssistantRun)
                     .join(
@@ -187,37 +207,16 @@ class ContextBuilder:
                 while True:
                     history = self.history_in(db, selected + [run.id], protocol)
                     size = (
-                        json_size(
-                            turn_request(
-                                profile,
-                                history,
-                                self.specs(
-                                    session.review_mode,
-                                    session.bash_enabled,
-                                    session.execution_scope,
-                                ),
-                            )
-                        )
+                        json_size(turn_request(profile, history, specs))
                         if profile
                         else json_size(
                             {
                                 "history": history,
-                                "tools": [
-                                    s.model_dump()
-                                    for s in self.specs(
-                                        session.review_mode,
-                                        session.bash_enabled,
-                                        session.execution_scope,
-                                    )
-                                ],
+                                "tools": [spec.model_dump() for spec in specs],
                             }
                         )
                     )
-                    budget = (
-                        self.registry.policy.context_bytes
-                        if modern or (session.bash_enabled and "bash" in self.registry.definitions)
-                        else self.budget
-                    )
+                    budget = self.registry.policy.context_bytes if use_policy else self.budget
                     if size <= budget:
                         break
                     if not selected:
@@ -231,11 +230,7 @@ class ContextBuilder:
                     if selected
                     else user.sequence
                 )
-                policy = (
-                    self.registry.policy.model_dump()
-                    if modern or (session.bash_enabled and "bash" in self.registry.definitions)
-                    else None
-                )
+                policy = self.registry.policy.model_dump() if use_policy else None
                 if policy and session.review_mode not in COMMAND_PERMISSION_MODES:
                     policy["network"].update(allow_public_https=False, require_write_approval=True)
                 context = Context(
@@ -244,14 +239,13 @@ class ContextBuilder:
                     else "4"
                     if session.review_mode in COMMAND_PERMISSION_MODES
                     else "3"
-                    if modern or (session.bash_enabled and "bash" in self.registry.definitions)
+                    if has_sandbox
                     else "2",
                     sandbox_policy=policy,
                     host_policy={
                         **self.registry.policy.host.model_dump(),
                         "default_cwd": str(Path(self.registry.policy.host.default_cwd).resolve()),
-                        "enabled": self.registry.policy.host.enabled
-                        and "host_bash" in self.registry.definitions,
+                        "enabled": self.registry.policy.host.enabled and "host_bash" in names,
                     }
                     if modern
                     else None,
@@ -263,12 +257,7 @@ class ContextBuilder:
                     to_sequence=user.sequence,
                     dropped_turns=dropped,
                     context_bytes=size,
-                    tool_names=[
-                        s.name
-                        for s in self.specs(
-                            session.review_mode, session.bash_enabled, session.execution_scope
-                        )
-                    ],
+                    tool_names=names,
                     review_mode=session.review_mode,
                     bash_enabled=session.bash_enabled,
                     captured_at=self.now(),
@@ -276,21 +265,10 @@ class ContextBuilder:
                 run.context = context.model_dump(by_alias=True)
             else:
                 context = Context.model_validate(run.context)
+                specs = self.frozen_specs(context)
                 history = self.history_in(db, context.selected_run_ids + [run.id], protocol)
                 size = (
-                    json_size(
-                        turn_request(
-                            profile,
-                            history,
-                            self.specs(
-                                context.review_mode,
-                                context.bash_enabled,
-                                "host_and_sandbox"
-                                if context.policy_version == "5"
-                                else "sandbox_only",
-                            ),
-                        )
-                    )
+                    json_size(turn_request(profile, history, specs))
                     if profile
                     else json_size(history)
                 )
@@ -302,17 +280,4 @@ class ContextBuilder:
                     raise AppError(Code.CONTEXT_TOO_LARGE)
                 if context.run_id != run.id or context.user_message_id != user.id:
                     raise AppError(Code.INVALID_STATE)
-            return (
-                profile,
-                context,
-                history,
-                [
-                    spec
-                    for spec in self.specs(
-                        context.review_mode,
-                        context.bash_enabled,
-                        "host_and_sandbox" if context.policy_version == "5" else "sandbox_only",
-                    )
-                    if spec.name in context.tool_names
-                ],
-            )
+            return profile, context, history, specs

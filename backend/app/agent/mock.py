@@ -23,9 +23,7 @@ class MockAssistantModel:
         calls = []
         expression = re.search(r"(-?\d+(?:\.\d+)?)\s*([+*/×÷-])\s*(-?\d+(?:\.\d+)?)", text)
         names = {s.name for s in specs}
-        command_tool = (
-            "host_bash" if text.startswith("host:") else "sandbox" if "sandbox" in names else "bash"
-        )
+        command_tool = "host_bash" if text.startswith("host:") else "sandbox"
         if text.startswith(("bash:", "sandbox:", "host:")) and command_tool in names:
             calls = [
                 proposal(

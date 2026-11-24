@@ -1,19 +1,18 @@
 import asyncio
 import time
-from concurrent.futures import ThreadPoolExecutor
 
-from pydantic import ValidationError
 from sqlalchemy import select
 
 from app.agent.bash import bash_result
 from app.agent.bash_policy import classify
-from app.agent.context import ContextBuilder, json_size, turn_binding
+from app.agent.context import ContextBuilder, turn_binding
 from app.agent.contracts import Context, RunScope
 from app.agent.graph import Continue, LoopExit, StepOutcome
 from app.agent.loop import AgentLoop
 from app.agent.mock import MockAssistantModel
 from app.agent.self_review import REVIEW_SYSTEM, ReviewItem, parse_review, review_history
-from app.agent.tools import ToolCallReviewer, ToolContext, ToolRegistry
+from app.agent.tools import ToolCallReviewer, ToolExecutor, ToolRegistry
+from app.agent.tools.builtin.web import WEB_NAMES, SearchKeys, WebTools
 from app.core.errors import AppError, Code
 from app.llm.config import ModelProfile
 from app.llm.keys import ModelKeys
@@ -22,12 +21,15 @@ from app.models.entities import (
     AssistantModelTurn,
     AssistantToolCall,
     AssistantToolResult,
-    BashExecution,
     SandboxNetworkRequest,
     SandboxOperation,
 )
 from app.repositories.sessions import call_digest, identity, require_scope, require_session
 from app.repositories.time import plus_seconds
+
+"""
+就相当于一个负责协调 Agent 执行过程的 Service 类。
+"""
 
 
 class Assistant:
@@ -42,28 +44,31 @@ class Assistant:
             now,
         )
         self.bash = bash
-        self.host = host
+        self.web = WebTools(SearchKeys(secrets).get) if bash else None
+        policy = bash.settings.sandbox if bash else None
+        disabled = set()
+        if not bash or not bash.settings.bash_enabled:
+            disabled.update({"sandbox", "workspace_write", "http_request"})
+        if not host or not host.available:
+            disabled.add("host_bash")
+        if not policy or policy.network.mode != "proxy" or not policy.network.allow_public_https:
+            disabled.update(WEB_NAMES)
         self.registry = registry or ToolRegistry(
-            bash_enabled=bool(bash and bash.settings.bash_enabled),
-            host_enabled=bool(host and host.available),
-            policy=bash.settings.sandbox if bash else None,
+            builtins=self.web.definitions() if self.web else (),
+            disabled=disabled,
+            policy=policy,
         )
+        self.executor = ToolExecutor(now, bash=bash, host=host)
         self.reviewer = ToolCallReviewer(self.registry)
         self.context = ContextBuilder(db, self.registry, secrets, now)
         self.loop = AgentLoop(db, repository, now)
         self.keys = ModelKeys(secrets)
         self.mock = MockAssistantModel()
-        self.tool_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="tavo-tools")
-        self.readers = {}
-        self.tool_timeout = 2
 
     def busy_slots(self):
-        return (
-            set(self.readers)
-            | (self.bash.busy_slots() if self.bash else set())
-            | (self.host.busy_slots() if self.host else set())
-        )
+        return self.executor.busy_slots()
 
+    # 确定额度，包括loop轮次，总时长，工具调用，连续失败
     def budget(self, run, name, legacy):
         value = (run.context or {}).get("sandboxPolicy")
         return (
@@ -72,30 +77,53 @@ class Assistant:
             else legacy
         )
 
+    # 单位换算
     def budget_ms(self, run):
         return self.budget(run, "max_active_seconds", 180) * 1000
 
+    # worker唯一调用方法
     async def run(self, scope: RunScope) -> LoopExit | None:
         manager = self.bash.manager if self.bash else None
         return await self.loop.run(
+            # 凭证包括会话IDrunID等一系列内容
             scope,
             self,
+            # 递归上限
             recursion_limit=max(64, self.registry.policy.max_rounds * 4 + 8),
+            # 准备清理函数
             cleanup=manager.finish_run if manager else None,
         )
 
+    """
+    这是模型输出节点。
+    scope：会话凭证
+    profile：配置，包括模型厂商key等内容
+    context：本轮上限位元数据
+    history：对话历史
+    specs：工具列表
+    """
+
     async def model(self, scope: RunScope) -> StepOutcome:
+        # 根据执行凭证获取配置文件，上下午，历史对话，工具列表
         profile, context, history, specs = self.context.prepare(scope)
+        # 数据库
         with self.db.session(write=True) as db:
+            # 获取当然run实例（并且提供个一系列交易）
             run = require_scope(db, scope, self.now())
+            # 如果超出预算，则返回错误
             if run.rounds >= self.budget(run, "max_rounds", 4) or run.active_ms >= self.budget_ms(
                 run
             ):
                 raise AppError(Code.TOOL_BUDGET_EXCEEDED)
+            # 循环次数加一
             run.rounds += 1
+            # 修订加一
             run.revision += 1
+            # 快照
             round_number = run.rounds
+            # 生成一次本周调用的主键
             turn_id = identity()
+            # 数据库中添加当前执行内容
             db.add(
                 AssistantModelTurn(
                     id=turn_id,
@@ -105,32 +133,48 @@ class Assistant:
                     created_at=self.now(),
                 )
             )
+            # 它是加密的 AAD（附加认证数据），用来把“这段密文属于哪一轮”绑定到密文本身。
             binding = turn_binding(run, round_number)
+            # 还剩多少秒可以用
             remaining = (self.budget_ms(run) - run.active_ms) / 1000
+        # 开始时间
         started = time.monotonic()
+        # 在限定时间内容发送一次模型调用，如果超时则抛出错误
         try:
             async with asyncio.timeout(min(60, remaining)):
                 turn = (
+                    # 进行一次模型问答，如果没配置则moke
                     await self.gateway.turn(profile, history, specs, self.keys.get(profile))
                     if profile
                     else await self.mock.turn(None, history, specs)
                 )
+        # 超时异常
         except TimeoutError:
             raise AppError(Code.MODEL_TIMEOUT) from None
+        # 获取当前的key和密文
         key_id, ciphertext = self.context.private.seal(binding, turn.model_dump())
+        # 写入
         with self.db.session(write=True) as db:
+            # 获取一个run
             run = require_scope(db, scope, self.now())
+            # 这个run的消耗的时间
             run.active_ms += int((time.monotonic() - started) * 1000)
+            # 如果超时
             if run.active_ms >= self.budget_ms(run) or run.tool_count + len(
                 turn.calls
             ) > self.budget(run, "max_tool_calls", 8):
+                # 返回错误
                 raise AppError(Code.TOOL_BUDGET_EXCEEDED)
+            # 获取返回的内容
             row = db.get(AssistantModelTurn, turn_id)
+            # 把状态设置为完成
             row.status = "completed"
             row.key_id = key_id
             row.ciphertext = ciphertext
+            # 结束时间
             row.finished_at = self.now()
             session = require_session(db, scope.session_id)
+            # 写入消息列表
             if turn.text:
                 self.repo.add_message(
                     db,
@@ -144,6 +188,7 @@ class Assistant:
                     },
                     run.id,
                 )
+            # 提取出模型提出的每一个工具调用，登记一下，并进行加密防止篡改
             for index, proposed in enumerate(turn.calls):
                 call = AssistantToolCall(
                     id=identity(),
@@ -162,17 +207,25 @@ class Assistant:
                 db.add(call)
                 db.flush()
                 self.repo.add_message(db, session, "tool_call", {"toolCallId": call.id}, run.id)
+            # 添加
             run.tool_count += len(turn.calls)
+            # 如果没有
             if not turn.calls:
                 self.repo.finish(db, run, "succeeded")
                 return LoopExit.COMPLETED
+            # 下个月阶段
             run.step = "review"
+            # 下一个阶段review
             return Continue("review")
 
+    # 人工review节点
     async def review(self, scope: RunScope) -> StepOutcome:
         with self.db.session() as db:
+            # 获取当前run的内容
             run = require_scope(db, scope, self.now())
+            # 获取运行时上下文
             context = Context.model_validate(run.context)
+            # 获取工具列表
             calls = list(
                 db.scalars(
                     select(AssistantToolCall)
@@ -184,6 +237,7 @@ class Assistant:
                     .order_by(AssistantToolCall.ordinal)
                 )
             )
+            # 获取当前的策略
             policy = {
                 c.id: self.reviewer.review(
                     c.name, c.arguments, context.tool_names, context.review_mode
@@ -200,7 +254,6 @@ class Assistant:
         with self.db.session(write=True) as db:
             run = require_scope(db, scope, self.now())
             waiting = False
-            session = require_session(db, scope.session_id)
             for old in calls:
                 call = db.get(AssistantToolCall, old.id)
                 if call_digest(call.name, call.arguments) != old.argument_digest:
@@ -222,11 +275,6 @@ class Assistant:
                         action = "deny"
                     elif reviewed.action == "ask" and action != "deny":
                         action = "ask"
-                if call.name == "bash" and session.workspace_unconfirmed and action != "deny":
-                    action = "ask"
-                    self.repo.review(
-                        db, call, "ask", "policy", "WORKSPACE_STATE_UNKNOWN", policy_version=version
-                    )
                 if action == "deny":
                     self.repo.result(db, run, call, "denied", {}, "FORBIDDEN")
                 elif action == "ask":
@@ -374,28 +422,26 @@ class Assistant:
         for call_id in ids:
             with self.db.session() as db:
                 current = require_scope(db, scope, self.now())
-                host_call = (current.context or {}).get("policyVersion") == "5" and db.get(
-                    AssistantToolCall, call_id
-                ).name == "host_bash"
-                managed = (current.context or {}).get("policyVersion") in {
-                    "3",
-                    "4",
-                    "5",
-                } and db.get(AssistantToolCall, call_id).name in {
-                    "bash",
-                    "sandbox",
-                    "workspace_write",
-                    "http_request",
-                }
-            if host_call:
+                name = db.get(AssistantToolCall, call_id).name
+                policy_version = (current.context or {}).get("policyVersion")
+            if name == "bash":
+                with self.db.session(write=True) as db:
+                    run = require_scope(db, scope, self.now())
+                    call = db.get(AssistantToolCall, call_id)
+                    self.repo.result(db, run, call, "denied", {}, Code.POLICY_DENIED)
+                continue
+            tool = self.registry.definitions.get(name)
+            if tool is None:
+                raise AppError(Code.FORBIDDEN)
+            route = self.executor.route(tool, policy_version)
+            if route == "host":
                 await self.host_tool(scope, call_id)
                 continue
-            if managed:
+            if route == "sandbox":
                 waiting = await self.managed_tool(scope, call_id)
                 if waiting:
                     return LoopExit.WAITING_REVIEW
                 continue
-            future = None
             started = time.monotonic()
             status = "succeeded"
             output = {}
@@ -412,77 +458,25 @@ class Assistant:
                     or call_digest(call.name, call.arguments) != call.argument_digest
                 ):
                     raise AppError(Code.FORBIDDEN)
-                if call.attempts >= (
-                    1 if call.name == "bash" else 2
-                ) or run.active_ms >= self.budget_ms(run):
+                remaining = (self.budget_ms(run) - run.active_ms) / 1000
+                if call.attempts >= 2 or remaining <= 0:
                     raise AppError(Code.TOOL_BUDGET_EXCEEDED)
                 tool, args = self.registry.validate(call.name, call.arguments)
                 call.status = "running"
                 call.attempts += 1
-            if call.name == "bash":
-                try:
-                    if not self.bash or not context.bash_enabled:
-                        raise AppError(Code.FORBIDDEN)
-                    # Recovery never repeats an invocation with a durable execution intent.
-                    with self.db.session() as db:
-                        if db.scalar(
-                            select(BashExecution).where(BashExecution.tool_call_id == call.id)
-                        ):
-                            raise AppError(Code.TOOL_EXECUTION_UNKNOWN)
-                    async with asyncio.timeout(
-                        max(0.001, (self.budget_ms(run) - run.active_ms) / 1000)
-                    ):
-                        result, error = await self.bash.execute(scope, call.id, args)
-                    output = result.model_dump(by_alias=True)
-                    status = "failed" if error else "succeeded"
-                except TimeoutError:
-                    raise AppError(Code.TOOL_BUDGET_EXCEEDED) from None
-                except AppError as failure:
-                    if failure.code == Code.TOOL_EXECUTION_UNKNOWN:
-                        raise
-                    status, output, error = "failed", {}, failure.code.value
-                with self.db.session(write=True) as db:
-                    run = require_scope(db, scope, self.now())
-                    run.active_ms += int((time.monotonic() - started) * 1000)
-                    if json_size(output) > 8192:
-                        raise AppError(Code.CONTEXT_TOO_LARGE)
-                    self.repo.result(
-                        db, run, db.get(AssistantToolCall, call_id), status, output, error
-                    )
-                continue
             try:
-                if scope.run_id in self.readers or len(self.readers) >= 2:
-                    raise AppError(Code.TOOL_BUDGET_EXCEEDED)
-                future = asyncio.get_running_loop().run_in_executor(
-                    self.tool_pool, tool.execute, args, ToolContext(self.now)
+                policy = (
+                    self.bash.manager.egress.network_for_run(scope.run_id)
+                    if name in WEB_NAMES and self.bash
+                    else None
                 )
-                self.readers[scope.run_id] = future
-
-                def release(completed, run_id=scope.run_id):
-                    if self.readers.get(run_id) is completed:
-                        self.readers.pop(run_id, None)
-                    if not completed.cancelled():
-                        completed.exception()
-
-                future.add_done_callback(release)
-                done, _ = await asyncio.wait({future}, timeout=self.tool_timeout)
-                if not done:
-                    raise AppError(Code.TIMEOUT)
-                output = tool.result.model_validate(future.result()).model_dump(by_alias=True)
-                if json_size(output) > 8192:
-                    raise AppError(Code.CONTEXT_TOO_LARGE)
-            except asyncio.CancelledError:
-                raise
-            except Exception as failure:
+                output = await self.executor.local(scope, tool, args, remaining, web_policy=policy)
+            except AppError as failure:
+                error = failure.code.value
+            except Exception:
+                error = Code.TOOL_FAILED.value
+            if error:
                 status = "failed"
-                output = {}
-                error = (
-                    failure.code.value
-                    if isinstance(failure, AppError)
-                    else Code.INVALID_DATA.value
-                    if isinstance(failure, ValidationError)
-                    else Code.TOOL_FAILED.value
-                )
             with self.db.session(write=True) as db:
                 run = require_scope(db, scope, self.now())
                 run.active_ms += int((time.monotonic() - started) * 1000)
@@ -494,7 +488,9 @@ class Assistant:
         return Continue("model")
 
     async def close(self):
-        await asyncio.to_thread(self.tool_pool.shutdown, wait=True)
+        await self.executor.close()
+        if self.web:
+            self.web.close()
 
     async def review_v3(self, scope: RunScope, context, calls) -> StepOutcome:
         risks = {
@@ -549,7 +545,7 @@ class Assistant:
                         action, reason = "ask", Code.APPROVAL_REQUIRED
                 if (
                     require_session(db, scope.session_id).workspace_unconfirmed
-                    and call.name in {"bash", "workspace_write"}
+                    and call.name in {"sandbox", "workspace_write"}
                     and action != "deny"
                     and context.policy_version not in {"4", "5"}
                 ):
@@ -569,7 +565,7 @@ class Assistant:
                         run,
                         call,
                         "denied",
-                        bash_result(code).model_dump(by_alias=True),
+                        {},
                         str(code),
                     )
                     if self.bash:
@@ -628,25 +624,16 @@ class Assistant:
                 raise AppError(
                     Code.TOOL_EXECUTION_UNKNOWN if call.attempts else Code.TOOL_BUDGET_EXCEEDED
                 )
-            _, args = self.registry.validate(call.name, call.arguments)
+            tool, args = self.registry.validate(call.name, call.arguments)
             call.status = "running"
             if not resume:
                 call.attempts += 1
         try:
-            if not self.bash or not context.bash_enabled or not self.bash.settings.bash_enabled:
+            if context.policy_version != "5" and not context.bash_enabled:
                 raise AppError(Code.POLICY_DENIED)
-            if resume:
-                output, error = await self.bash.manager.resume_commit(scope, call_id)
-            elif call.name == "http_request":
-                result, error = await self.bash.manager.egress.execute(
-                    scope, call_id, args.request_id
-                )
-                output = result.model_dump(by_alias=True)
-            else:
-                result, error = await self.bash.manager.execute(
-                    scope, call_id, args, kind="bash" if call.name == "sandbox" else call.name
-                )
-                output = result.model_dump(by_alias=True)
+            output, error = await self.executor.command(
+                "sandbox", scope, call_id, tool, args, resume=resume
+            )
         except AppError as failure:
             if failure.code == Code.TOOL_EXECUTION_UNKNOWN:
                 raise
@@ -784,18 +771,17 @@ class Assistant:
                 raise AppError(Code.POLICY_DENIED)
             if call.attempts:
                 raise AppError(Code.TOOL_EXECUTION_UNKNOWN)
-            _, args = self.registry.validate(call.name, call.arguments)
+            tool, args = self.registry.validate(call.name, call.arguments)
             call.status, call.attempts = "running", 1
         try:
-            if not self.host:
-                raise AppError(Code.HOST_UNAVAILABLE)
-            result, error = await self.host.execute(scope, call_id, args)
+            output, error = await self.executor.command("host", scope, call_id, tool, args)
         except AppError as failure:
             if failure.code in {Code.TOOL_EXECUTION_UNKNOWN, Code.LEASE_LOST, Code.CANCELLED}:
                 raise
             error = str(failure.code)
             result = bash_result(failure.code)
             result.execution_target = "host"
+            output = result.model_dump(by_alias=True)
         with self.db.session(write=True) as db:
             run = require_scope(db, scope, self.now())
             run.active_ms += int((time.monotonic() - started) * 1000)
@@ -804,6 +790,6 @@ class Assistant:
                 run,
                 db.get(AssistantToolCall, call_id),
                 "failed" if error else "succeeded",
-                result.model_dump(by_alias=True),
+                output,
                 error,
             )

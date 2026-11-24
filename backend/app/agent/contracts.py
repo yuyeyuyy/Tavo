@@ -16,6 +16,7 @@ ReviewMode = Literal[
     "auto_sandbox",
 ]
 COMMAND_PERMISSION_MODES = frozenset({"full_access", "auto_review", "request_approval"})
+MAX_TOOL_DEFINITIONS = 32
 RunStatus = Literal[
     "pending", "running", "waiting_review", "succeeded", "failed", "cancelled", "interrupted"
 ]
@@ -188,7 +189,7 @@ class ContextSummary(DTO):
     to_sequence: int
     dropped_turns: int
     context_bytes: int
-    tool_names: list[str]
+    tool_names: Annotated[list[str], Field(max_length=MAX_TOOL_DEFINITIONS)]
 
 
 class Run(DTO):
@@ -251,6 +252,7 @@ class ApprovalPreview(DTO):
     details: dict[str, JsonValue]
 
 
+#
 @dataclass(frozen=True)
 class RunScope:
     # Scope comes from the Worker lease, never from client/model arguments.
